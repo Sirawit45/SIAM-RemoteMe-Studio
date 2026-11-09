@@ -428,8 +428,26 @@ const RemoteViewer = {
     getNormalizedCoords(evt) {
         const rect = this.canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
-        const x = Math.max(0, Math.min(1, (evt.clientX - rect.left) / rect.width));
-        const y = Math.max(0, Math.min(1, (evt.clientY - rect.top) / rect.height));
+
+        let imgLeft = rect.left;
+        let imgTop = rect.top;
+        let imgW = rect.width;
+        let imgH = rect.height;
+
+        if (!this.isStretchFill && this.canvas.width > 0 && this.canvas.height > 0) {
+            const canvasAspect = this.canvas.width / this.canvas.height;
+            const rectAspect = rect.width / rect.height;
+            if (rectAspect > canvasAspect) {
+                imgW = rect.height * canvasAspect;
+                imgLeft = rect.left + (rect.width - imgW) / 2;
+            } else {
+                imgH = rect.width / canvasAspect;
+                imgTop = rect.top + (rect.height - imgH) / 2;
+            }
+        }
+
+        const x = Math.max(0, Math.min(1, (evt.clientX - imgLeft) / imgW));
+        const y = Math.max(0, Math.min(1, (evt.clientY - imgTop) / imgH));
         return { x: Number(x.toFixed(4)), y: Number(y.toFixed(4)) };
     },
 
@@ -616,12 +634,49 @@ const RemoteViewer = {
     },
 
     toggleFullscreen() {
-        const stage = document.getElementById('remote-stage-container');
-        if (!document.fullscreenElement) {
-            stage?.requestFullscreen().catch(() => {});
-        } else {
-            document.exitFullscreen().catch(() => {});
+        this.isFullscreen = !this.isFullscreen;
+        document.body.classList.toggle('immersive-fullscreen', this.isFullscreen);
+
+        const hud = document.getElementById('fullscreen-floating-hud');
+        if (hud) {
+            hud.classList.toggle('hidden', !this.isFullscreen);
+            hud.classList.toggle('flex', this.isFullscreen);
         }
+
+        // On mobile/tablet, automatically fill 100% of the screen (no black bars) when entering fullscreen!
+        if (this.isFullscreen && window.innerWidth < 1024) {
+            this.isStretchFill = true;
+            this.canvas?.classList.add('canvas-fill-stretch');
+            App.setText('btn-fs-stretch', 'สัดส่วนจริง');
+        } else if (!this.isFullscreen) {
+            this.isStretchFill = false;
+            this.canvas?.classList.remove('canvas-fill-stretch');
+        }
+
+        // Also invoke native browser Fullscreen API where supported (Android / Desktop)
+        const docEl = document.documentElement;
+        if (this.isFullscreen) {
+            if (docEl.requestFullscreen) {
+                docEl.requestFullscreen().catch(() => {});
+            } else if (docEl.webkitRequestFullscreen) {
+                docEl.webkitRequestFullscreen();
+            }
+            App.toast('โหมดเต็มหน้าจอ 100% (กดปุ่ม "ย่อจอ" มุมขวาบนเพื่อออก)', 'info');
+        } else {
+            if (document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+        lucide.createIcons();
+    },
+
+    toggleStretchFill() {
+        this.isStretchFill = !this.isStretchFill;
+        this.canvas?.classList.toggle('canvas-fill-stretch', this.isStretchFill);
+        App.setText('btn-fs-stretch', this.isStretchFill ? 'สัดส่วนจริง' : 'เต็มจอไร้ขอบ');
+        App.toast(this.isStretchFill ? 'ขยายภาพเต็มหน้าจอ 100% (ไร้ขอบดำ)' : 'แสดงภาพตามสัดส่วนหน้าจอคอมจริง', 'info');
     },
 
     // --- Thai Text & Clipboard Modal ---

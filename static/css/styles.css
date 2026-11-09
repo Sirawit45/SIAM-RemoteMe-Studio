@@ -144,16 +144,20 @@ body {
 
 /* Remote Viewer Stage */
 #remote-stage-container {
-    background: radial-gradient(circle at center, #1a1d2d 0%, #090b10 100%);
+    background: #05070b;
     position: relative;
     overflow: auto;
     display: flex;
     align-items: center;
     justify-content: center;
     touch-action: none;
+    width: 100%;
+    height: 100%;
 }
 
 #remote-canvas {
+    width: 100%;
+    height: 100%;
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
@@ -162,6 +166,45 @@ body {
     outline: none;
     transform-origin: center center;
     transition: transform 0.12s ease-out;
+}
+
+#remote-canvas.canvas-fill-stretch {
+    object-fit: fill !important;
+}
+
+/* True Immersive Fullscreen Mode (Works on iPhone iOS Safari, Android, and Desktop!) */
+body.immersive-fullscreen #main-top-header,
+body.immersive-fullscreen #mobile-bottom-nav,
+body.immersive-fullscreen #remote-top-toolbar,
+body.immersive-fullscreen #remote-mobile-thumb-bar,
+body.immersive-fullscreen #app-sidebar {
+    display: none !important;
+}
+
+body.immersive-fullscreen #tab-remote,
+body.immersive-fullscreen #remote-stage-container {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    z-index: 9990 !important;
+    background: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.immersive-fullscreen #remote-canvas {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-width: 100vw !important;
+    max-height: 100dvh !important;
+}
+
+/* On mobile landscape, automatically compact bars to maximize remote screen area */
+@media (max-height: 520px) and (orientation: landscape) {
+    body.remote-tab-active #mobile-bottom-nav {
+        display: none !important;
+    }
 }
 
 /* Progress Bar Striping Animation */
