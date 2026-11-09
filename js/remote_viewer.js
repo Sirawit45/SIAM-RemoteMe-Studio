@@ -31,6 +31,7 @@ const RemoteViewer = {
     lastFrameBitmap: null,
     lastLocalInputTime: 0,
     rafPending: false,
+    isTouchActive: ('ontouchstart' in window) && window.innerWidth < 1024,
 
     init() {
         this.canvas = document.getElementById('remote-canvas');
@@ -259,15 +260,17 @@ const RemoteViewer = {
 
             this.ctx.drawImage(bitmap, 0, 0);
 
-            // Use 0ms local predicted cursor while user is actively moving finger/mouse (<450ms)
-            const isLocalActive = (performance.now() - this.lastLocalInputTime) < 450;
-            const cx = (isLocalActive ? this.virtualCursorX : (normCx / 10000)) * width;
-            const cy = (isLocalActive ? this.virtualCursorY : (normCy / 10000)) * height;
-            if (!isLocalActive) {
-                this.virtualCursorX = normCx / 10000;
-                this.virtualCursorY = normCy / 10000;
+            // Draw remote virtual cursor ONLY on touch devices (phones/tablets)
+            if (this.isTouchActive) {
+                const isLocalActive = (performance.now() - this.lastLocalInputTime) < 450;
+                const cx = (isLocalActive ? this.virtualCursorX : (normCx / 10000)) * width;
+                const cy = (isLocalActive ? this.virtualCursorY : (normCy / 10000)) * height;
+                if (!isLocalActive) {
+                    this.virtualCursorX = normCx / 10000;
+                    this.virtualCursorY = normCy / 10000;
+                }
+                this.drawRemoteCursor(cx, cy);
             }
-            this.drawRemoteCursor(cx, cy);
         } catch (e) {
             // Ignore dropped decode frame
         }
@@ -433,26 +436,8 @@ const RemoteViewer = {
     getNormalizedCoords(evt) {
         const rect = this.canvas.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
-
-        let imgLeft = rect.left;
-        let imgTop = rect.top;
-        let imgW = rect.width;
-        let imgH = rect.height;
-
-        if (!this.isStretchFill && this.canvas.width > 0 && this.canvas.height > 0) {
-            const canvasAspect = this.canvas.width / this.canvas.height;
-            const rectAspect = rect.width / rect.height;
-            if (rectAspect > canvasAspect) {
-                imgW = rect.height * canvasAspect;
-                imgLeft = rect.left + (rect.width - imgW) / 2;
-            } else {
-                imgH = rect.width / canvasAspect;
-                imgTop = rect.top + (rect.height - imgH) / 2;
-            }
-        }
-
-        const x = Math.max(0, Math.min(1, (evt.clientX - imgLeft) / imgW));
-        const y = Math.max(0, Math.min(1, (evt.clientY - imgTop) / imgH));
+        const x = Math.max(0, Math.min(1, (evt.clientX - rect.left) / rect.width));
+        const y = Math.max(0, Math.min(1, (evt.clientY - rect.top) / rect.height));
         return { x: Number(x.toFixed(4)), y: Number(y.toFixed(4)) };
     },
 
@@ -460,15 +445,15 @@ const RemoteViewer = {
         const c = this.canvas;
 
         c.addEventListener('mousemove', (e) => {
+            this.isTouchActive = false;
             if (!this.inputEnabled) return;
             const { x, y } = this.getNormalizedCoords(e);
             this.virtualCursorX = x;
             this.virtualCursorY = y;
             this.lastLocalInputTime = performance.now();
-            this.renderLocalCursorInstant();
 
             const now = performance.now();
-            if (now - this.lastMouseMoveTime < 12) return;
+            if (now - this.lastMouseMoveTime < 24) return;
             this.lastMouseMoveTime = now;
             this.sendJson({ type: 'mousemove', x, y });
         });
@@ -493,8 +478,7 @@ const RemoteViewer = {
         c.addEventListener('dblclick', (e) => {
             if (!this.inputEnabled) return;
             e.preventDefault();
-            const { x, y } = this.getNormalizedCoords(e);
-            this.sendJson({ type: 'dblclick', button: 'left', x, y });
+            // In Windows, rapid mousedown/mouseup pairs trigger native double-click.
         });
 
         c.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -519,6 +503,7 @@ const RemoteViewer = {
 
         // Mobile / Tablet Touch support (Supports both Trackpad relative drag & Direct tap mode!)
         c.addEventListener('touchstart', (e) => {
+            this.isTouchActive = true;
             if (!this.inputEnabled || e.touches.length === 0) return;
             const t = e.touches[0];
             this.touchStartX = t.clientX;
