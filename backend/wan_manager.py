@@ -56,7 +56,7 @@ class WanManager:
     1. Manages automatic Cloudflare Edge HTTPS/WSS Tunnel (or SSH localhost.run fallback).
     2. Publishes Device ID -> Public Tunnel URL to Global Rendezvous Registry so users
        can connect from anywhere in the world using either:
-       - 9-digit Device ID (e.g. 865 557 579)
+       - 9-digit Device ID (e.g. 123 456 789)
        - Public HTTPS URL (https://xxxx.trycloudflare.com)
        - QR Code scan on 4G/5G Mobile
     """
@@ -256,7 +256,7 @@ class WanManager:
 
     def resolve_remote_device_id(self, target_device_id: str) -> Optional[Dict[str, Any]]:
         """
-        Resolve a 9-digit Device ID (e.g. '865-557-579' or '865 557 579') to its active Global HTTPS URL.
+        Resolve a 9-digit Device ID (e.g. '123-456-789' or '123 456 789') to its active Global HTTPS URL.
         """
         clean_id = re.sub(r"[^0-9]", "", target_device_id)
         if len(clean_id) != 9:

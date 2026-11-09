@@ -18,24 +18,21 @@ TEMP_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def generate_device_id() -> str:
-    """Generate a deterministic yet friendly 9-digit Device ID based on machine node."""
-    node = uuid.getnode()
-    random.seed(node)
-    digits = "".join(str(random.randint(0, 9)) for _ in range(9))
-    random.seed()  # reset seed
+    """Generate a random private 9-digit Device ID (stored locally in remoteme_config.json, never on GitHub)."""
+    digits = "".join(str(random.SystemRandom().randint(0, 9)) for _ in range(9))
     return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
 
 
 def generate_pin() -> str:
-    return "".join(str(random.randint(0, 9)) for _ in range(6))
+    return "".join(str(random.SystemRandom().randint(0, 9)) for _ in range(6))
 
 
 class AppConfig:
     def __init__(self):
         self.device_id: str = generate_device_id()
         self.device_name: str = platform.node() or "RemoteMe-PC"
-        self.pin_code: str = "123456"
-        self.require_pin: bool = False
+        self.pin_code: str = generate_pin()
+        self.require_pin: bool = True
         self.port: int = 8765
         self.default_fps: int = 60
         self.default_quality: int = 75

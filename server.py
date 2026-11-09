@@ -98,8 +98,17 @@ async def on_startup():
     wan_manager.start_tunnel(port=config.port, provider="cloudflare")
 
 
+def _is_local_host_request(request: Request) -> bool:
+    """Return True ONLY if the request originates directly from this local machine (not via Cloud Tunnel or LAN)."""
+    if request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for"):
+        return False
+    client_ip = request.client.host if request.client else ""
+    return client_ip in ("127.0.0.1", "::1", "localhost")
+
+
 @app.get("/api/system/info")
-async def api_system_info():
+async def api_system_info(request: Request):
+    is_local = _is_local_host_request(request)
     sessions = session_manager.get_active_sessions()
     telemetry = get_system_telemetry(active_clients_count=len(sessions))
     wan_state = wan_manager.get_state()
@@ -112,7 +121,8 @@ async def api_system_info():
             "url": wan_state["public_url"],
         })
     telemetry["sessions"] = sessions
-    telemetry["pin_code"] = config.pin_code
+    # Only show the secret PIN on the host PC's own local screen; mask it for external viewers!
+    telemetry["pin_code"] = config.pin_code if is_local else "******"
     return telemetry
 
 
