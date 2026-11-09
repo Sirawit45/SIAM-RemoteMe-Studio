@@ -58,79 +58,7 @@ class SessionManager:
             "token": None,
         }
         self.pending_requests[req_id] = req_data
-
-        # On Windows host, also show a native TopMost Windows Confirmation Dialog so the host user can click Yes/No from anywhere!
-        if sys.platform == "win32":
-            threading.Thread(
-                target=self._show_windows_native_approval_dialog,
-                args=(req_id, device_label, client_ip),
-                daemon=True,
-            ).start()
-
         return req_data
-
-    def _close_windows_dialog(self, req_id: str):
-        if sys.platform != "win32":
-            return
-        try:
-            import ctypes
-            title = f"SIAM RemoteMe Studio - คำขอเชื่อมต่อ [{req_id[-6:]}]"
-            hwnd = ctypes.windll.user32.FindWindowW(None, title)
-            if hwnd:
-                WM_CLOSE = 0x0010
-                ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
-        except Exception:
-            pass
-
-    def _show_windows_native_approval_dialog(self, req_id: str, device_label: str, client_ip: str):
-        try:
-            import ctypes
-            MB_YESNO = 0x00000004
-            MB_ICONQUESTION = 0x00000020
-            MB_SYSTEMMODAL = 0x00001000
-            MB_SETFOREGROUND = 0x00010000
-            MB_TOPMOST = 0x00040000
-            IDYES = 6
-            IDNO = 7
-
-            title = f"SIAM RemoteMe Studio - คำขอเชื่อมต่อ [{req_id[-6:]}]"
-            msg = (
-                f"มีอุปกรณ์กำลังขอเชื่อมต่อเข้าควบคุมคอมพิวเตอร์เครื่องนี้:\n\n"
-                f"📱 อุปกรณ์: {device_label}\n"
-                f"🌐 หมายเลข IP: {client_ip}\n\n"
-                f"คุณต้องการ 'ยอมรับ (Yes)' ให้อุปกรณ์นี้เข้าใช้งานหรือไม่?\n"
-                f"(หรือคุณสามารถกรอกรหัส PIN 6 หลักที่หน้าจอมือถือได้เช่นกัน)"
-            )
-
-            # Use MessageBoxTimeoutW (60s timeout) so it never hangs forever
-            try:
-                MessageBoxTimeoutW = ctypes.windll.user32.MessageBoxTimeoutW
-                res = MessageBoxTimeoutW(
-                    0,
-                    msg,
-                    title,
-                    MB_YESNO | MB_ICONQUESTION | MB_SYSTEMMODAL | MB_SETFOREGROUND | MB_TOPMOST,
-                    0,
-                    60000,
-                )
-            except Exception:
-                res = ctypes.windll.user32.MessageBoxW(
-                    0,
-                    msg,
-                    title,
-                    MB_YESNO | MB_ICONQUESTION | MB_SYSTEMMODAL | MB_SETFOREGROUND | MB_TOPMOST,
-                )
-
-            req = self.pending_requests.get(req_id)
-            if not req or req["status"] != "pending":
-                return
-
-            if res == IDYES:
-                self.resolve_connection_request(req_id, approved=True)
-            elif res == IDNO:
-                self.resolve_connection_request(req_id, approved=False)
-        except Exception:
-            pass
 
     def resolve_connection_request(self, req_id: str, approved: bool) -> Optional[Dict[str, Any]]:
         req = self.pending_requests.get(req_id)
@@ -147,7 +75,6 @@ class SessionManager:
             req["status"] = "rejected"
             req["token"] = None
 
-        self._close_windows_dialog(req_id)
         return req
 
     def approve_all_pending_by_pin(self) -> str:
@@ -156,7 +83,6 @@ class SessionManager:
             if req["status"] == "pending":
                 req["status"] = "approved"
                 req["token"] = token
-                self._close_windows_dialog(req_id)
         return token
 
     def get_pending_requests(self) -> List[Dict[str, Any]]:
@@ -210,8 +136,6 @@ class SessionManager:
         self.sessions.clear()
         self.webrtc_peers.clear()
         self.authorized_tokens.clear()
-        for rid in list(self.pending_requests.keys()):
-            self._close_windows_dialog(rid)
         self.pending_requests.clear()
         return count
 
