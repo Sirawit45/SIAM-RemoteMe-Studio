@@ -92,6 +92,14 @@ class UploadCancelRequest(BaseModel):
 
 
 # --- System & Auth Endpoints ---
+@app.middleware("http")
+async def disable_browser_cache(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.on_event("startup")
 async def on_startup():
     # Automatically launch Global Internet Tunnel (Cloudflare Edge HTTPS/WSS) on startup

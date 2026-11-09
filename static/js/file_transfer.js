@@ -15,12 +15,30 @@ const FileTransfer = {
     CHUNK_SIZE: 1024 * 1024, // 1 MiB per chunk for smooth pause/resume & high throughput
 
     init() {
-        this.loadLocations();
-        this.loadDirectory('');
+        if (!App.isDisconnected) {
+            this.loadLocations();
+            this.loadDirectory('');
+        }
         this.renderTransferViews();
 
         // Update transfer speed & modal UI every 250ms
         setInterval(() => this.updateTransferMetricsUI(), 250);
+    },
+
+    clearAllData() {
+        this.currentPath = '';
+        this.parentPath = null;
+        this.allItems = [];
+        this.filteredItems = [];
+        this.clipboardItems = [];
+        const quickEl = document.getElementById('file-quick-locations');
+        if (quickEl) quickEl.innerHTML = '';
+        const driveEl = document.getElementById('file-drive-locations');
+        if (driveEl) driveEl.innerHTML = '';
+        const pathInput = document.getElementById('explorer-path-input');
+        if (pathInput) pathInput.value = '';
+        const rowsEl = document.getElementById('explorer-file-rows');
+        if (rowsEl) rowsEl.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-xs text-slate-400">ตัดการเชื่อมต่อแล้ว ไม่สามารถดูไฟล์ได้</td></tr>`;
     },
 
     formatBytes(bytes) {
@@ -58,6 +76,7 @@ const FileTransfer = {
     },
 
     async loadLocations() {
+        if (App.isDisconnected) return;
         try {
             const res = await fetch(App.getApiUrl('/api/files/locations'));
             const data = await res.json();
@@ -102,6 +121,7 @@ const FileTransfer = {
     },
 
     async loadDirectory(pathStr = '') {
+        if (App.isDisconnected) return;
         try {
             const q = pathStr ? `?path=${encodeURIComponent(pathStr)}` : '';
             const res = await fetch(App.getApiUrl(`/api/files/list${q}`));
