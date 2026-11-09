@@ -1,16 +1,174 @@
+import os
+import sys
 import time
-from typing import Dict, Any, List
+import secrets
+import threading
+from typing import Dict, Any, List, Set, Optional
 from fastapi import WebSocket
 
 
 class SessionManager:
     """
-    Manages connected Remote Viewer sessions and WebRTC P2P signaling.
+    Manages connected Remote Viewer sessions, Host Approval Popups, Session Auth Tokens, and WebRTC P2P signaling.
     """
 
     def __init__(self):
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.webrtc_peers: Dict[str, WebSocket] = {}
+        self.authorized_tokens: Set[str] = set()
+        self.pending_requests: Dict[str, Dict[str, Any]] = {}
+
+    def issue_token(self) -> str:
+        token = secrets.token_hex(16)
+        self.authorized_tokens.add(token)
+        return token
+
+    def is_token_valid(self, token: Optional[str]) -> bool:
+        if not token:
+            return False
+        return token in self.authorized_tokens
+
+    def revoke_token(self, token: Optional[str]):
+        if token:
+            self.authorized_tokens.discard(token)
+
+    def create_connection_request(self, client_ip: str, user_agent: str) -> Dict[str, Any]:
+        # Parse friendly device name from User-Agent
+        ua = user_agent or "Remote Device"
+        if "iPhone" in ua:
+            device_label = "iPhone (iOS)"
+        elif "iPad" in ua:
+            device_label = "iPad (iPadOS)"
+        elif "Android" in ua:
+            device_label = "โทรศัพท์ Android"
+        elif "Macintosh" in ua:
+            device_label = "คอมพิวเตอร์ Mac"
+        elif "Windows" in ua:
+            device_label = "คอมพิวเตอร์ Windows"
+        else:
+            device_label = "อุปกรณ์รีโมทภายนอก"
+
+        req_id = f"req_{int(time.time() * 1000)}_{secrets.token_hex(3)}"
+        req_data = {
+            "request_id": req_id,
+            "device_label": device_label,
+            "client_ip": client_ip,
+            "created_at": int(time.time() * 1000),
+            "status": "pending",  # "pending" | "approved" | "rejected"
+            "token": None,
+        }
+        self.pending_requests[req_id] = req_data
+
+        # On Windows host, also show a native TopMost Windows Confirmation Dialog so the host user can click Yes/No from anywhere!
+        if sys.platform == "win32":
+            threading.Thread(
+                target=self._show_windows_native_approval_dialog,
+                args=(req_id, device_label, client_ip),
+                daemon=True,
+            ).start()
+
+        return req_data
+
+    def _close_windows_dialog(self, req_id: str):
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            title = f"SIAM RemoteMe Studio - คำขอเชื่อมต่อ [{req_id[-6:]}]"
+            hwnd = ctypes.windll.user32.FindWindowW(None, title)
+            if hwnd:
+                WM_CLOSE = 0x0010
+                ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+        except Exception:
+            pass
+
+    def _show_windows_native_approval_dialog(self, req_id: str, device_label: str, client_ip: str):
+        try:
+            import ctypes
+            MB_YESNO = 0x00000004
+            MB_ICONQUESTION = 0x00000020
+            MB_SYSTEMMODAL = 0x00001000
+            MB_SETFOREGROUND = 0x00010000
+            MB_TOPMOST = 0x00040000
+            IDYES = 6
+            IDNO = 7
+
+            title = f"SIAM RemoteMe Studio - คำขอเชื่อมต่อ [{req_id[-6:]}]"
+            msg = (
+                f"มีอุปกรณ์กำลังขอเชื่อมต่อเข้าควบคุมคอมพิวเตอร์เครื่องนี้:\n\n"
+                f"📱 อุปกรณ์: {device_label}\n"
+                f"🌐 หมายเลข IP: {client_ip}\n\n"
+                f"คุณต้องการ 'ยอมรับ (Yes)' ให้อุปกรณ์นี้เข้าใช้งานหรือไม่?\n"
+                f"(หรือคุณสามารถกรอกรหัส PIN 6 หลักที่หน้าจอมือถือได้เช่นกัน)"
+            )
+
+            # Use MessageBoxTimeoutW (60s timeout) so it never hangs forever
+            try:
+                MessageBoxTimeoutW = ctypes.windll.user32.MessageBoxTimeoutW
+                res = MessageBoxTimeoutW(
+                    0,
+                    msg,
+                    title,
+                    MB_YESNO | MB_ICONQUESTION | MB_SYSTEMMODAL | MB_SETFOREGROUND | MB_TOPMOST,
+                    0,
+                    60000,
+                )
+            except Exception:
+                res = ctypes.windll.user32.MessageBoxW(
+                    0,
+                    msg,
+                    title,
+                    MB_YESNO | MB_ICONQUESTION | MB_SYSTEMMODAL | MB_SETFOREGROUND | MB_TOPMOST,
+                )
+
+            req = self.pending_requests.get(req_id)
+            if not req or req["status"] != "pending":
+                return
+
+            if res == IDYES:
+                self.resolve_connection_request(req_id, approved=True)
+            elif res == IDNO:
+                self.resolve_connection_request(req_id, approved=False)
+        except Exception:
+            pass
+
+    def resolve_connection_request(self, req_id: str, approved: bool) -> Optional[Dict[str, Any]]:
+        req = self.pending_requests.get(req_id)
+        if not req:
+            return None
+        if req["status"] != "pending":
+            return req
+
+        if approved:
+            token = self.issue_token()
+            req["status"] = "approved"
+            req["token"] = token
+        else:
+            req["status"] = "rejected"
+            req["token"] = None
+
+        self._close_windows_dialog(req_id)
+        return req
+
+    def approve_all_pending_by_pin(self) -> str:
+        token = self.issue_token()
+        for req_id, req in list(self.pending_requests.items()):
+            if req["status"] == "pending":
+                req["status"] = "approved"
+                req["token"] = token
+                self._close_windows_dialog(req_id)
+        return token
+
+    def get_pending_requests(self) -> List[Dict[str, Any]]:
+        now = int(time.time() * 1000)
+        # Clean up requests older than 90 seconds
+        for rid, r in list(self.pending_requests.items()):
+            if now - r["created_at"] > 90_000:
+                self.pending_requests.pop(rid, None)
+        return [r for r in self.pending_requests.values() if r["status"] == "pending"]
+
+    def get_request_status(self, req_id: str) -> Optional[Dict[str, Any]]:
+        return self.pending_requests.get(req_id)
 
     def register_session(self, session_id: str, client_ip: str, user_agent: str, mode: str = "binary_stream"):
         self.sessions[session_id] = {
@@ -44,13 +202,17 @@ class SessionManager:
         count = 0
         for pid, ws in list(self.webrtc_peers.items()):
             try:
-                await ws.send_json({"type": "force_disconnect", "reason": "เจ้าของเครื่องได้ตัดการเชื่อมต่อแล้ว"})
+                await ws.send_json({"type": "force_disconnect", "reason": "ตัดการเชื่อมต่อแล้ว กรุณายืนยันตัวตนใหม่เมื่อต้องการเชื่อมต่ออีกครั้ง"})
                 await ws.close(code=1000)
                 count += 1
             except Exception:
                 pass
         self.sessions.clear()
         self.webrtc_peers.clear()
+        self.authorized_tokens.clear()
+        for rid in list(self.pending_requests.keys()):
+            self._close_windows_dialog(rid)
+        self.pending_requests.clear()
         return count
 
     async def register_webrtc_peer(self, peer_id: str, ws: WebSocket):
@@ -65,7 +227,6 @@ class SessionManager:
             except Exception:
                 pass
         else:
-            # Broadcast to all other WebRTC peers (e.g. host <-> viewer)
             for pid, ws in list(self.webrtc_peers.items()):
                 if pid != sender_id:
                     try:

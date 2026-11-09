@@ -114,9 +114,22 @@ def _is_local_host_request(request: Request) -> bool:
     return client_ip in ("127.0.0.1", "::1", "localhost")
 
 
+def _is_authorized_request(request: Request) -> bool:
+    """Return True if local host console, or if PIN lock is disabled, or if a valid session token is provided."""
+    if _is_local_host_request(request) or not config.require_pin:
+        return True
+    token = request.headers.get("X-RemoteMe-Token") or request.query_params.get("token")
+    return session_manager.is_token_valid(token)
+
+
 @app.get("/api/system/info")
 async def api_system_info(request: Request):
     is_local = _is_local_host_request(request)
+    if not _is_authorized_request(request):
+        raise HTTPException(
+            status_code=401,
+            detail="กรุณายืนยันรหัส PIN หรือรอเครื่องปลายทางกดยอมรับการเชื่อมต่อก่อน",
+        )
     sessions = session_manager.get_active_sessions()
     telemetry = get_system_telemetry(active_clients_count=len(sessions))
     wan_state = wan_manager.get_state()
@@ -129,6 +142,7 @@ async def api_system_info(request: Request):
             "url": wan_state["public_url"],
         })
     telemetry["sessions"] = sessions
+    telemetry["pending_requests"] = session_manager.get_pending_requests() if is_local else []
     # Only show the secret PIN on the host PC's own local screen; mask it for external viewers!
     telemetry["pin_code"] = config.pin_code if is_local else "******"
     return telemetry
@@ -161,11 +175,68 @@ async def api_wan_resolve(device_id: str = Query(...)):
     return record
 
 
+class ApprovalRespondRequest(BaseModel):
+    request_id: str
+    approved: bool
+
+
+@app.post("/api/auth/request")
+async def api_request_access(request: Request):
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-forwarded-for")
+        or (request.client.host if request.client else "unknown")
+    )
+    user_agent = request.headers.get("user-agent", "Remote Device")
+    req_data = session_manager.create_connection_request(client_ip, user_agent)
+    return {
+        "request_id": req_data["request_id"],
+        "status": req_data["status"],
+        "device_name": config.device_name,
+        "device_id": config.device_id,
+    }
+
+
+@app.get("/api/auth/request-status")
+async def api_request_status(request_id: str = Query(...)):
+    req = session_manager.get_request_status(request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="ไม่พบคำขอเชื่อมต่อนี้ หรือหมดเวลาแล้ว")
+    return {
+        "request_id": req["request_id"],
+        "status": req["status"],
+        "token": req.get("token"),
+        "device_name": config.device_name,
+        "device_id": config.device_id,
+    }
+
+
+@app.post("/api/auth/respond")
+async def api_respond_access(req: ApprovalRespondRequest):
+    resolved = session_manager.resolve_connection_request(req.request_id, req.approved)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="ไม่พบคำขอเชื่อมต่อนี้")
+    return {"status": "ok", "request": resolved}
+
+
 @app.post("/api/auth/verify")
 async def api_verify_pin(req: PinVerifyRequest):
     if not config.require_pin or req.pin.strip() == config.pin_code:
-        return {"authenticated": True, "device_name": config.device_name, "device_id": config.device_id}
+        token = session_manager.approve_all_pending_by_pin()
+        return {
+            "authenticated": True,
+            "token": token,
+            "device_name": config.device_name,
+            "device_id": config.device_id,
+        }
     raise HTTPException(status_code=401, detail="รหัส PIN ไม่ถูกต้อง")
+
+
+@app.post("/api/auth/logout")
+async def api_logout(request: Request):
+    token = request.headers.get("X-RemoteMe-Token")
+    session_manager.revoke_token(token)
+    return {"status": "ok"}
 
 
 @app.post("/api/config/update")
@@ -212,12 +283,16 @@ async def api_screenshot(monitor: int = 1):
 
 # --- File Explorer & High-Speed Resumable Transfer Endpoints ---
 @app.get("/api/files/locations")
-async def api_file_locations():
+async def api_file_locations(request: Request):
+    if not _is_authorized_request(request):
+        raise HTTPException(status_code=401, detail="กรุณาเชื่อมต่อและยืนยันตัวตนก่อนดูไฟล์")
     return {"locations": file_manager.get_quick_locations()}
 
 
 @app.get("/api/files/list")
-async def api_file_list(path: Optional[str] = Query(default=None)):
+async def api_file_list(request: Request, path: Optional[str] = Query(default=None)):
+    if not _is_authorized_request(request):
+        raise HTTPException(status_code=401, detail="กรุณาเชื่อมต่อและยืนยันตัวตนก่อนดูไฟล์")
     try:
         return file_manager.list_directory(path)
     except FileNotFoundError as e:
@@ -461,9 +536,16 @@ async def ws_remote_endpoint(websocket: WebSocket):
                 mtype = msg.get("type")
 
                 if mtype == "auth":
-                    if not config.require_pin or msg.get("pin") == config.pin_code:
+                    provided_token = msg.get("token")
+                    provided_pin = (msg.get("pin") or "").strip()
+                    if (
+                        not config.require_pin
+                        or session_manager.is_token_valid(provided_token)
+                        or (provided_pin and provided_pin == config.pin_code)
+                    ):
                         state["authenticated"] = True
-                        await websocket.send_json({"type": "auth_result", "authenticated": True})
+                        token = provided_token if session_manager.is_token_valid(provided_token) else session_manager.approve_all_pending_by_pin()
+                        await websocket.send_json({"type": "auth_result", "authenticated": True, "token": token})
                     else:
                         await websocket.send_json({"type": "auth_result", "authenticated": False, "error": "รหัส PIN ไม่ถูกต้อง"})
                     continue

@@ -102,17 +102,13 @@ const RemoteViewer = {
     },
 
     resumeSession() {
-        App.isDisconnected = false;
-        if (!App.pollTimer) {
-            App.pollTimer = setInterval(() => App.fetchSystemInfo(), 2500);
-        }
-        App.fetchSystemInfo();
-        this.reconnect();
-        App.toast('กำลังเชื่อมต่อหน้าจอรีโมทอีกครั้ง...', 'info');
+        App.enterDisconnectedState(true);
+        App.requestHostApproval();
     },
 
     connect() {
-        if (this.manualDisconnect) return;
+        if (this.manualDisconnect || App.isDisconnected) return;
+        if (!App.isLocalHostConsole() && !App.authToken) return;
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
@@ -146,9 +142,9 @@ const RemoteViewer = {
 
         ws.onclose = () => {
             this.isConnected = false;
-            if (!this.manualDisconnect) {
+            if (!this.manualDisconnect && !App.isDisconnected) {
                 setTimeout(() => {
-                    if (!this.isConnected && !this.manualDisconnect) this.connect();
+                    if (!this.isConnected && !this.manualDisconnect && !App.isDisconnected) this.connect();
                 }, 2500);
             }
         };
@@ -161,43 +157,27 @@ const RemoteViewer = {
                 this.updateMonitorList(msg.monitors);
             }
             if (msg.require_pin && !msg.authenticated) {
-                // 1) If running on local host PC where pin_code is visible on Dashboard, auto-authenticate without blocking UI
+                if (App.authToken) {
+                    this.sendJson({ type: 'auth', token: App.authToken });
+                    return;
+                }
                 const localPin = (App.systemInfo?.pin_code && App.systemInfo.pin_code !== '******') ? App.systemInfo.pin_code : null;
                 if (localPin) {
-                    this.lastAttemptedPin = localPin;
                     this.sendJson({ type: 'auth', pin: localPin });
                     return;
                 }
-                // 2) Check saved PIN on this mobile/remote device
-                const savedPin = localStorage.getItem(`remoteme_saved_pin_${this.currentDeviceId}`);
-                if (savedPin) {
-                    this.lastAttemptedPin = savedPin;
-                    this.sendJson({ type: 'auth', pin: savedPin });
-                    return;
-                }
-                // 3) Prompt user with clear instructions on where to see the PIN
-                const pin = prompt(`เครื่อง "${msg.device_name}" ล็อกรหัสความปลอดภัย\nกรุณากรอกรหัส PIN 6 หลัก (ดูรหัสได้ที่หน้าแรกในกล่อง "รหัสผ่านความปลอดภัย" บนเครื่องคอมพิวเตอร์):`);
-                if (pin !== null) {
-                    this.lastAttemptedPin = pin.trim();
-                    this.sendJson({ type: 'auth', pin: this.lastAttemptedPin });
-                }
+                // Require authorization on the Lock Screen (Host Popup Approval OR 6-Digit PIN)
+                this.disconnectSession();
             }
         } else if (msg.type === 'auth_result') {
             if (msg.authenticated) {
-                if (this.lastAttemptedPin && this.currentDeviceId) {
-                    localStorage.setItem(`remoteme_saved_pin_${this.currentDeviceId}`, this.lastAttemptedPin);
+                if (msg.token) {
+                    App.authToken = msg.token;
+                    sessionStorage.setItem('remoteme_auth_token', msg.token);
                 }
-                App.toast('ยืนยันรหัส PIN สำเร็จ เริ่มสตรีมหน้าจอแล้ว', 'success');
             } else {
-                if (this.currentDeviceId) {
-                    localStorage.removeItem(`remoteme_saved_pin_${this.currentDeviceId}`);
-                }
-                App.toast(msg.error || 'รหัส PIN ไม่ถูกต้อง', 'error');
-                const retryPin = prompt('รหัส PIN ไม่ถูกต้อง กรุณากรอกรหัส PIN 6 หลักอีกครั้ง:');
-                if (retryPin !== null) {
-                    this.lastAttemptedPin = retryPin.trim();
-                    this.sendJson({ type: 'auth', pin: this.lastAttemptedPin });
-                }
+                App.toast(msg.error || 'กรุณายืนยันตัวตนใหม่', 'error');
+                this.disconnectSession();
             }
         } else if (msg.type === 'force_disconnect') {
             this.disconnectSession();
