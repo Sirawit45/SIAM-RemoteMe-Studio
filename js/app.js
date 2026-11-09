@@ -406,6 +406,7 @@ const App = {
         }
         this.currentTab = tabName;
         this.closeMobileDrawer();
+        document.body.classList.toggle('remote-tab-active', tabName === 'remote');
 
         const tabs = ['dashboard', 'remote', 'files', 'transfers', 'settings'];
         tabs.forEach(t => {

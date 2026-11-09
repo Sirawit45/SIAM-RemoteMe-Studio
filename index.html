@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/styles.css?v=2.6.0">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -367,7 +367,7 @@
         <!-- ==================== TAB 2: REMOTE DESKTOP 60FPS STUDIO (MOBILE + DESKTOP OPTIMIZED) ==================== -->
         <section id="tab-remote" class="flex-1 flex flex-col overflow-hidden hidden">
             <!-- Compact Single-Row Scrollable Toolbar -->
-            <div class="px-2.5 py-1.5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar whitespace-nowrap shrink-0">
+            <div id="remote-top-toolbar" class="px-2.5 py-1.5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar whitespace-nowrap shrink-0">
                 <div class="flex items-center gap-1.5 shrink-0">
                     <div class="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700 text-xs">
                         <i data-lucide="monitor" class="w-3.5 h-3.5 text-rose-400"></i>
@@ -446,6 +446,23 @@
 
                 <canvas id="remote-canvas" tabindex="0"></canvas>
 
+                <!-- Floating Mini HUD when in Fullscreen Mode (Works on iPhone, Android & PC!) -->
+                <div id="fullscreen-floating-hud" class="hidden fixed top-2.5 right-2.5 z-[9999] items-center gap-1.5 bg-slate-900/80 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/15 shadow-2xl text-white text-[11px]">
+                    <button onclick="RemoteViewer.triggerMobileMouseClick('click', 'left')" class="px-2.5 py-1 rounded-full bg-white/10 active:bg-rose-600 font-semibold">
+                        คลิกซ้าย
+                    </button>
+                    <button onclick="RemoteViewer.triggerMobileMouseClick('click', 'right')" class="px-2.5 py-1 rounded-full bg-white/10 active:bg-indigo-600 text-indigo-300 font-semibold">
+                        คลิกขวา
+                    </button>
+                    <button id="btn-fs-stretch" onclick="RemoteViewer.toggleStretchFill()" class="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+                        เต็มจอไร้ขอบ
+                    </button>
+                    <button onclick="RemoteViewer.toggleFullscreen()" class="px-2.5 py-1 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1">
+                        <i data-lucide="minimize-2" class="w-3.5 h-3.5"></i>
+                        <span>ย่อจอ</span>
+                    </button>
+                </div>
+
                 <!-- Disconnected Overlay -->
                 <div id="remote-disconnected-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md hidden flex-col items-center justify-center text-white z-20 p-6 text-center">
                     <div class="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center mb-3 text-red-400">
@@ -472,7 +489,7 @@
             </div>
 
             <!-- MOBILE THUMB MOUSE & TRACKPAD CONTROL BAR (Shown on Mobile/Tablet for easy 1-hand control!) -->
-            <div class="lg:hidden bg-slate-900 border-t border-slate-800 px-2 py-2 flex items-center justify-between gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
+            <div id="remote-mobile-thumb-bar" class="lg:hidden bg-slate-900 border-t border-slate-800 px-2 py-2 flex items-center justify-between gap-1.5 shrink-0 overflow-x-auto no-scrollbar">
                 <button id="btn-touch-mode" onclick="RemoteViewer.toggleTouchMode()" class="px-2.5 py-2 rounded-xl bg-rose-600 text-white text-[11px] font-bold flex items-center gap-1 shrink-0 shadow">
                     <i data-lucide="touchpad" class="w-3.5 h-3.5"></i>
                     <span id="touch-mode-label">โหมดทัชแพด</span>
@@ -907,8 +924,8 @@
     <div id="toast-container" class="fixed bottom-16 lg:bottom-5 right-4 z-50 space-y-2 pointer-events-none"></div>
 
     <!-- Application Scripts -->
-    <script src="js/app.js?v=2.5.0"></script>
-    <script src="js/remote_viewer.js?v=2.5.0"></script>
-    <script src="js/file_transfer.js?v=2.5.0"></script>
+    <script src="js/app.js?v=2.6.0"></script>
+    <script src="js/remote_viewer.js?v=2.6.0"></script>
+    <script src="js/file_transfer.js?v=2.6.0"></script>
 </body>
 </html>
