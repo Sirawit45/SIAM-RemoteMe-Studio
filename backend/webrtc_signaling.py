@@ -40,6 +40,19 @@ class SessionManager:
     def get_active_sessions(self) -> List[Dict[str, Any]]:
         return list(self.sessions.values())
 
+    async def disconnect_all_sessions(self) -> int:
+        count = 0
+        for pid, ws in list(self.webrtc_peers.items()):
+            try:
+                await ws.send_json({"type": "force_disconnect", "reason": "เจ้าของเครื่องได้ตัดการเชื่อมต่อแล้ว"})
+                await ws.close(code=1000)
+                count += 1
+            except Exception:
+                pass
+        self.sessions.clear()
+        self.webrtc_peers.clear()
+        return count
+
     async def register_webrtc_peer(self, peer_id: str, ws: WebSocket):
         self.webrtc_peers[peer_id] = ws
 

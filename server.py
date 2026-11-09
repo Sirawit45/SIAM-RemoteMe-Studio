@@ -170,7 +170,14 @@ async def api_update_config(req: ConfigUpdateRequest):
 @app.post("/api/config/regenerate-pin")
 async def api_regenerate_pin():
     new_pin = config.regenerate_pin()
+    await session_manager.disconnect_all_sessions()
     return {"status": "ok", "pin_code": new_pin}
+
+
+@app.post("/api/sessions/disconnect-all")
+async def api_disconnect_all_sessions():
+    disconnected = await session_manager.disconnect_all_sessions()
+    return {"status": "ok", "disconnected": disconnected}
 
 
 @app.get("/api/clipboard")

@@ -308,10 +308,21 @@ const App = {
                 this.setText('card-pin-code', data.pin_code);
                 const pinInput = document.getElementById('set-pin-code');
                 if (pinInput) pinInput.value = data.pin_code;
-                this.toast(`สร้างรหัส PIN ใหม่เรียบร้อย: ${data.pin_code}`, 'success');
+                this.toast(`สร้างรหัส PIN ใหม่เรียบร้อย: ${data.pin_code} (ตัดการเชื่อมต่อเดิมทั้งหมดแล้ว)`, 'success');
             }
         } catch (e) {
             this.toast('ไม่สามารถสร้างรหัส PIN ใหม่ได้', 'error');
+        }
+    },
+
+    async disconnectAllSessions() {
+        try {
+            RemoteViewer.disconnectSession();
+            await fetch(this.getApiUrl('/api/sessions/disconnect-all'), { method: 'POST' });
+            this.toast('ตัดการเชื่อมต่ออุปกรณ์ทั้งหมดเรียบร้อยแล้ว', 'success');
+            this.fetchSystemInfo();
+        } catch (e) {
+            this.toast('หยุดการเชื่อมต่อรีโมทแล้ว', 'info');
         }
     },
 
@@ -381,6 +392,17 @@ const App = {
             setTimeout(() => this.fetchSystemInfo(), 1500);
         } catch (e) {
             this.toast('ไม่สามารถรีเฟรชอุโมงค์ออนไลน์ได้', 'error');
+        }
+    },
+
+    async stopWanTunnel() {
+        try {
+            await fetch(this.getApiUrl('/api/wan/stop'), { method: 'POST' });
+            await fetch(this.getApiUrl('/api/sessions/disconnect-all'), { method: 'POST' });
+            this.toast('ปิดลิงก์ออนไลน์และตัดการเชื่อมต่อจากภายนอกทั้งหมดแล้ว', 'success');
+            this.fetchSystemInfo();
+        } catch (e) {
+            this.toast('ไม่สามารถปิดอุโมงค์ออนไลน์ได้', 'error');
         }
     },
 
