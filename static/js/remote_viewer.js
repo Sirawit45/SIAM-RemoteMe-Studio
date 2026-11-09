@@ -38,7 +38,7 @@ const RemoteViewer = {
             this.ctx = this.canvas.getContext('2d', { alpha: false, desynchronized: true });
             this.bindInputEvents();
         }
-        this.connect();
+        // Do NOT auto-connect on startup! Only connect after user enters target ID & Password.
 
         // Update FPS & Bandwidth HUD every second
         setInterval(() => {
@@ -60,6 +60,7 @@ const RemoteViewer = {
     },
 
     ensureConnected() {
+        if (!App.isRemoteConnected) return;
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             this.connect();
         } else {
@@ -81,6 +82,9 @@ const RemoteViewer = {
     disconnectSession() {
         this.manualDisconnect = true;
         this.isConnected = false;
+        document.body.classList.remove('immersive-fullscreen');
+        document.getElementById('fullscreen-floating-hud')?.classList.add('hidden');
+        document.getElementById('fullscreen-floating-hud')?.classList.remove('flex');
         if (this.pingInterval) {
             clearInterval(this.pingInterval);
             this.pingInterval = null;
@@ -92,23 +96,24 @@ const RemoteViewer = {
             try { this.ws.close(); } catch (e) {}
             this.ws = null;
         }
+        if (this.ctx && this.canvas) {
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
         const overlay = document.getElementById('remote-disconnected-overlay');
         if (overlay) {
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
         }
         App.enterDisconnectedState();
-        App.toast('หยุดการเชื่อมต่อและล้างข้อมูลเครื่องปลายทางแล้ว', 'info');
+        App.toast('ตัดการเชื่อมต่อแล้ว กลับสู่หน้าหลัก', 'info');
     },
 
     resumeSession() {
         App.enterDisconnectedState(true);
-        App.requestHostApproval();
     },
 
     connect() {
-        if (this.manualDisconnect || App.isDisconnected) return;
-        if (!App.isLocalHostConsole() && !App.authToken) return;
+        if (this.manualDisconnect || !App.isRemoteConnected || !App.authToken) return;
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }

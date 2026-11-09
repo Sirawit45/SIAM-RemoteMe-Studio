@@ -36,331 +36,168 @@
 <body class="h-[100dvh] w-screen flex flex-col lg:flex-row overflow-hidden">
 
     <!-- MOBILE DRAWER BACKDROP -->
-    <div id="mobile-drawer-backdrop" onclick="App.closeMobileDrawer()" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-30 hidden lg:hidden"></div>
+    <div id="mobile-drawer-backdrop" onclick="App.closeMobileDrawer()" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-30 hidden"></div>
 
-    <!-- ==================== LEFT SIDEBAR (Drawer on Mobile, Fixed on Desktop) ==================== -->
-    <aside id="app-sidebar" class="fixed inset-y-0 left-0 -translate-x-full lg:static lg:translate-x-0 w-64 sidebar-gradient text-white flex flex-col justify-between shrink-0 z-40 shadow-2xl transition-transform duration-200 ease-in-out">
-        <div>
-            <!-- Brand Header -->
-            <div class="px-5 py-4 flex items-center justify-between border-b border-white/10">
-                <div class="flex items-center gap-3">
-                    <img src="assets/logo.png" alt="SIAM Logo" class="w-11 h-11 rounded-xl shadow-lg shadow-rose-600/40 object-cover shrink-0" />
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-bold text-lg tracking-wide text-white">SIAM</span>
-                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">PRO 60FPS</span>
-                        </div>
-                        <p class="text-xs text-slate-400">Remote & File Studio</p>
-                    </div>
-                </div>
-                <button onclick="App.closeMobileDrawer()" class="lg:hidden p-1.5 rounded-lg bg-white/10 text-slate-300">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-
-            <!-- Navigation Menu -->
-            <div class="p-3.5 space-y-1.5">
-                <div class="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">เมนูหลัก (Main Menu)</div>
-
-                <div class="nav-item active" data-tab="dashboard" onclick="App.switchTab('dashboard')">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
-                    <span>แดชบอร์ด & เชื่อมต่อ</span>
-                </div>
-
-                <div class="nav-item" data-tab="remote" onclick="App.switchTab('remote')">
-                    <i data-lucide="monitor-play" class="w-4 h-4"></i>
-                    <span class="flex-1">รีโมทหน้าจอสด</span>
-                    <span id="nav-fps-badge" class="text-[10px] font-mono-num px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">60 FPS</span>
-                </div>
-
-                <div class="nav-item" data-tab="files" onclick="App.switchTab('files')">
-                    <i data-lucide="folder-sync" class="w-4 h-4"></i>
-                    <span>จัดการและโอนย้ายไฟล์</span>
-                </div>
-
-                <div class="nav-item" data-tab="transfers" onclick="App.switchTab('transfers')">
-                    <i data-lucide="arrow-down-up" class="w-4 h-4"></i>
-                    <span class="flex-1">รายการโอนย้าย</span>
-                    <span id="nav-transfer-badge" class="text-[10px] font-mono-num px-1.5 py-0.5 rounded-full bg-rose-500 text-white hidden">0</span>
-                </div>
-
-                <div class="pt-3 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">ระบบ (System)</div>
-
-                <div class="nav-item" data-tab="settings" onclick="App.switchTab('settings')">
-                    <i data-lucide="sliders-horizontal" class="w-4 h-4"></i>
-                    <span>ตั้งค่า & ความปลอดภัย</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Bottom Host Status & Quick Theme Toggle -->
-        <div class="p-4 border-t border-white/10 space-y-3 bg-black/20">
-            <div class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2">
-                    <span id="host-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="host-status-text" class="text-slate-200 font-medium">พร้อมเชื่อมต่อ (Online)</span>
-                </div>
-                <span id="sidebar-ping" class="font-mono-num text-emerald-400 text-[11px]">~1 ms</span>
-            </div>
-
-            <div class="bg-white/5 rounded-xl p-2.5 border border-white/10 text-xs">
-                <div class="flex justify-between text-slate-400">
-                    <span>รหัสเครื่อง (ID):</span>
-                    <span id="sidebar-device-id" class="font-mono-num font-semibold text-white">--- --- ---</span>
-                </div>
-            </div>
-
-            <button onclick="App.toggleTheme()" class="w-full py-2 px-3 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-300 flex items-center justify-center gap-2 transition">
-                <i data-lucide="moon" class="w-3.5 h-3.5"></i>
-                <span>สลับโหมดมืด / สว่าง</span>
-            </button>
-        </div>
-    </aside>
+    <!-- ==================== LEFT SIDEBAR (Hidden on Home Screen; only used if needed during active remote session) ==================== -->
+    <aside id="app-sidebar" class="hidden"></aside>
 
     <!-- ==================== MAIN WORKSPACE ==================== -->
     <main class="flex-1 flex flex-col h-full w-full overflow-hidden">
 
-        <!-- TOP HEADER BAR (Compact on Mobile) -->
-        <header id="main-top-header" class="px-3 lg:px-6 py-2.5 lg:py-0 lg:h-16 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 shrink-0 z-10">
-            <div class="flex items-center gap-2 min-w-0">
-                <!-- Hamburger Button on Mobile -->
-                <button onclick="App.openMobileDrawer()" class="lg:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 shrink-0">
-                    <i data-lucide="menu" class="w-5 h-5"></i>
-                </button>
-                <h1 id="page-title" class="text-sm lg:text-lg font-bold tracking-tight truncate">SIAM RemoteMe</h1>
-                <span id="target-host-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium flex items-center gap-1 shrink-0">
-                    <i data-lucide="laptop" class="w-3 h-3"></i>
-                    <span id="header-device-name" class="max-w-[110px] sm:max-w-xs truncate">Local Host</span>
-                </span>
-            </div>
-
-            <!-- Quick Connect to Another Remote Host Bar -->
-            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <div class="flex-1 sm:flex-initial flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl px-2.5 py-1.5 border border-slate-200 dark:border-slate-700">
-                    <i data-lucide="globe" class="w-3.5 h-3.5 text-rose-500 mr-1.5 shrink-0"></i>
-                    <input id="remote-host-input" type="text" placeholder="ใส่รหัส 9 หลัก (เช่น 123 456 789) หรือ IP"
-                        onkeydown="if(event.key==='Enter') App.connectToTargetHost()"
-                        class="bg-transparent text-xs w-full sm:w-56 focus:outline-none text-slate-700 dark:text-slate-200 font-mono-num" />
-                    <button onclick="App.connectToTargetHost()" class="ml-1.5 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-semibold shrink-0 transition">
-                        เชื่อมต่อ
-                    </button>
-                    <button id="btn-reset-localhost" onclick="App.resetToLocalHost()" class="ml-1 px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] hidden shrink-0">
-                        เครื่องนี้
-                    </button>
-                </div>
-
-                <button id="btn-header-disconnect" onclick="RemoteViewer.disconnectSession()" class="px-3 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 shrink-0 transition" title="หยุดการเชื่อมต่อรีโมททันที">
-                    <i data-lucide="phone-off" class="w-3.5 h-3.5"></i>
-                    <span class="hidden sm:inline">หยุดเชื่อมต่อ</span>
-                </button>
-
-                <button id="btn-header-open-remote" onclick="App.switchTab('remote')" class="hidden md:flex px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-semibold shadow-md shadow-rose-500/20 items-center gap-1.5 shrink-0 transition">
-                    <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
-                    <span>เปิดจอรีโมท</span>
-                </button>
-            </div>
-        </header>
-
-        <!-- ==================== GLOBAL DISCONNECTED LOCK SCREEN (Hides ALL CPU, IP, Files & Controls!) ==================== -->
-        <section id="global-disconnected-screen" class="flex-1 hidden flex-col items-center justify-center p-4 lg:p-6 text-center bg-slate-50 dark:bg-slate-950 overflow-y-auto z-30">
-            <div class="app-card max-w-md w-full p-6 lg:p-8 space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800">
-                <div class="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
-                    <i data-lucide="shield-lock" class="w-8 h-8"></i>
-                </div>
+        <!-- TOP HEADER BAR -->
+        <header id="main-top-header" class="px-4 lg:px-8 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex items-center justify-between gap-3 shrink-0 z-10">
+            <div class="flex items-center gap-3 min-w-0">
+                <img src="assets/logo.png" alt="SIAM Logo" class="w-9 h-9 rounded-xl shadow-md shadow-rose-600/30 object-cover shrink-0" />
                 <div>
-                    <h2 id="lock-screen-title" class="text-lg font-bold text-slate-800 dark:text-white">ยืนยันการเชื่อมต่อเครื่องปลายทาง</h2>
-                    <p id="lock-screen-subtitle" class="text-xs text-slate-400 mt-1">ระบบปิดซ่อนข้อมูลสถานะเครื่อง (CPU/RAM), ลิงก์ IP และไฟล์ทั้งหมดจนกว่าจะได้รับอนุญาต</p>
-                </div>
-
-                <!-- Waiting for Host Approval Box -->
-                <div id="approval-waiting-box" class="hidden p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 space-y-2">
-                    <div class="flex items-center justify-center gap-2 text-xs font-bold">
-                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-                        <span>กำลังรอเครื่องปลายทางกด "ยอมรับ (Accept)" บนหน้าจอคอม...</span>
-                    </div>
-                    <p class="text-[11px] opacity-80">มีป๊อปอัปเด้งขึ้นที่หน้าจอคอมพิวเตอร์แล้ว กดปุ่ม "ยอมรับ (Yes)" ที่เครื่องคอมเพื่อเข้าใช้งานทันที</p>
-                </div>
-
-                <div class="space-y-3 text-left pt-1">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">1. รหัสเครื่อง 9 หลัก (Device ID) หรือ IP เครื่องปลายทาง</label>
-                        <input id="reconnect-host-input" type="text" placeholder="เช่น 916-479-992"
-                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-mono-num focus:outline-none focus:border-rose-500 text-slate-800 dark:text-slate-100" />
-                    </div>
-
-                    <!-- Option A: Request Host Popup Approval -->
-                    <button onclick="App.requestHostApproval()" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition">
-                        <i data-lucide="bell-ring" class="w-4 h-4"></i>
-                        <span>ส่งคำขอให้เครื่องปลายทางกด "ยอมรับ"</span>
-                    </button>
-
-                    <div class="relative flex py-1 items-center">
-                        <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                        <span class="flex-shrink mx-3 text-[11px] text-slate-400">หรือ กรอกรหัส PIN 6 หลัก</span>
-                        <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
-                    </div>
-
-                    <!-- Option B: Enter 6-Digit Security PIN -->
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1">2. รหัสผ่านความปลอดภัย 6 หลัก (PIN Code)</label>
-                        <div class="flex gap-2">
-                            <input id="reconnect-pin-input" type="password" inputmode="numeric" maxlength="12" placeholder="กรอกรหัส PIN 6 หลัก"
-                                onkeydown="if(event.key==='Enter') App.reconnectWithPin()"
-                                class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-mono-num tracking-widest focus:outline-none focus:border-rose-500 text-slate-800 dark:text-slate-100" />
-                            <button onclick="App.reconnectWithPin()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 shrink-0 transition">
-                                ยืนยัน PIN
-                            </button>
-                        </div>
+                    <div class="flex items-center gap-2">
+                        <h1 id="page-title" class="text-sm lg:text-base font-bold tracking-tight truncate">SIAM RemoteMe Studio</h1>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25">PRO 60FPS</span>
                     </div>
                 </div>
             </div>
-        </section>
 
-        <!-- ==================== TAB 1: DASHBOARD & CONNECT ==================== -->
-        <section id="tab-dashboard" class="flex-1 overflow-y-auto p-3.5 lg:p-6 space-y-4 lg:space-y-6">
-
-            <!-- Top 3 Metric Summary Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 lg:gap-5">
-                <div class="app-card stat-card-glow p-4 lg:p-5 flex items-center justify-between gap-2">
-                    <div>
-                        <p class="text-xs font-medium text-slate-400 mb-1">อุปกรณ์ที่เชื่อมต่ออยู่ (Active Sessions)</p>
-                        <div class="flex items-baseline gap-2">
-                            <span id="dash-active-sessions" class="text-2xl lg:text-3xl font-bold font-mono-num text-rose-600">01</span>
-                            <span class="text-xs text-emerald-500 font-medium">ออนไลน์พร้อมใช้งาน</span>
-                        </div>
-                    </div>
-                    <button onclick="App.disconnectAllSessions()" class="px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-600 hover:text-white text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 text-xs font-bold flex items-center gap-1.5 transition shrink-0" title="ตัดการเชื่อมต่ออุปกรณ์ทั้งหมดที่กำลังรีโมทเข้ามา">
-                        <i data-lucide="power-off" class="w-4 h-4"></i>
+            <!-- Right Actions: Active Remote Controls (Hidden until connected to a remote target!) + Theme Toggle -->
+            <div class="flex items-center gap-2 shrink-0">
+                <!-- Shown ONLY when actively connected to a remote target machine -->
+                <div id="active-session-nav" class="hidden items-center gap-1.5">
+                    <button onclick="App.switchTab('remote')" id="top-btn-remote" class="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+                        <i data-lucide="monitor-play" class="w-3.5 h-3.5"></i>
+                        <span>หน้าจอรีโมท</span>
+                    </button>
+                    <button onclick="App.switchTab('files')" id="top-btn-files" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i data-lucide="folder-sync" class="w-3.5 h-3.5"></i>
+                        <span>โอนย้ายไฟล์</span>
+                    </button>
+                    <button id="btn-header-disconnect" onclick="RemoteViewer.disconnectSession()" class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition" title="ตัดการเชื่อมต่อและกลับหน้าหลัก">
+                        <i data-lucide="phone-off" class="w-3.5 h-3.5"></i>
                         <span>ตัดการเชื่อมต่อ</span>
                     </button>
                 </div>
 
-                <div class="app-card stat-card-glow p-4 lg:p-5 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-medium text-slate-400 mb-1">ความลื่นไหล & ความหน่วง (Stream Latency)</p>
-                        <div class="flex items-baseline gap-2">
-                            <span id="dash-stream-fps" class="text-2xl lg:text-3xl font-bold font-mono-num">60 FPS</span>
-                            <span id="dash-stream-ping" class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-mono-num">~2 ms</span>
-                        </div>
-                    </div>
-                    <div class="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-600">
-                        <i data-lucide="zap" class="w-5 h-5"></i>
-                    </div>
-                </div>
-
-                <div class="app-card stat-card-glow p-4 lg:p-5 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs font-medium text-slate-400 mb-1">ความเร็วโอนย้ายไฟล์ (Transfer Engine)</p>
-                        <div class="flex items-baseline gap-2">
-                            <span id="dash-transfer-speed" class="text-2xl lg:text-3xl font-bold font-mono-num text-emerald-600">0.0 MiB/s</span>
-                            <span id="dash-completed-transfers" class="text-xs text-slate-400">สำเร็จ 0 รายการ</span>
-                        </div>
-                    </div>
-                    <div class="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600">
-                        <i data-lucide="hard-drive-download" class="w-5 h-5"></i>
-                    </div>
-                </div>
+                <button onclick="App.toggleTheme()" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition" title="สลับโหมดมืด / สว่าง">
+                    <i data-lucide="moon" class="w-4 h-4"></i>
+                </button>
             </div>
+        </header>
 
-            <!-- Connection Credentials & Quick Actions Card (Clean & Private — No URLs, IPs, or CPU/RAM exposed) -->
-            <div class="app-card p-4 lg:p-6 space-y-5">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                        <h2 class="text-sm lg:text-base font-bold flex items-center gap-2">
-                            <i data-lucide="shield-check" class="w-5 h-5 text-rose-600 shrink-0"></i>
-                            <span>รหัสประจำเครื่องและความปลอดภัย (เชื่อมต่อด้วยรหัส 9 หลัก)</span>
-                        </h2>
-                        <p class="text-xs text-slate-400 mt-0.5">ใช้รหัสเครื่อง 9 หลักและรหัส PIN 6 หลักด้านล่างเพื่อเชื่อมต่อจากมือถือหรือคอมพิวเตอร์เครื่องอื่น</p>
+        <!-- ==================== HOME SCREEN: ONLY THIS MACHINE'S ID/PASSWORD & REMOTE TARGET ID/PASSWORD ==================== -->
+        <section id="tab-dashboard" class="flex-1 overflow-y-auto p-4 lg:p-8 flex items-center justify-center bg-slate-50/60 dark:bg-slate-950">
+            <div class="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+
+                <!-- CARD 1: ข้อมูลเครื่องนี้ (This Machine's ID & Refreshable Password) -->
+                <div id="local-host-card" class="app-card p-6 lg:p-8 flex flex-col justify-between space-y-6 border border-slate-200/90 dark:border-slate-800 shadow-xl">
+                    <div class="space-y-5">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-600 flex items-center justify-center shrink-0">
+                                    <i data-lucide="monitor" class="w-6 h-6"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-base lg:text-lg font-bold text-slate-800 dark:text-white">ข้อมูลเครื่องนี้ (อนุญาตให้รีโมท)</h2>
+                                    <p class="text-xs text-slate-400">บอกรหัส ID และ Password นี้กับผู้ที่ต้องการเข้ามาควบคุมเครื่องคุณ</p>
+                                </div>
+                            </div>
+                            <span id="host-status-dot" class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" title="ออนไลน์พร้อมรับการเชื่อมต่อ"></span>
+                        </div>
+
+                        <!-- This Machine's ID -->
+                        <div class="p-4 lg:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                            <div class="flex items-center justify-between text-xs font-semibold text-slate-400">
+                                <span>รหัส ID ของเครื่องนี้ (Your ID)</span>
+                                <button onclick="App.copyText(App.localSystemInfo?.device_id || '')" class="text-rose-600 hover:underline flex items-center gap-1 font-bold">
+                                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                    <span>คัดลอก ID</span>
+                                </button>
+                            </div>
+                            <div id="card-device-id" class="text-2xl lg:text-3xl font-extrabold font-mono-num tracking-wider text-slate-800 dark:text-white select-all">--- --- ---</div>
+                        </div>
+
+                        <!-- This Machine's Password + Refresh Button -->
+                        <div class="p-4 lg:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                            <div class="flex items-center justify-between text-xs font-semibold text-slate-400">
+                                <span>รหัสผ่าน (Password)</span>
+                                <button onclick="App.regeneratePin()" class="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center gap-1 font-bold transition">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                    <span>รีเฟรชรหัสใหม่</span>
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div id="card-pin-code" class="text-2xl lg:text-3xl font-extrabold font-mono-num tracking-widest text-rose-600 select-all">------</div>
+                                <button onclick="App.copyText(App.localSystemInfo?.pin_code || '')" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1">
+                                    <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                                    <span>คัดลอก</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-1.5">
-                        <span id="wan-status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <button onclick="App.openQrModal()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1 shadow-sm transition">
-                            <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
-                            <span>QR มือถือ</span>
-                        </button>
-                        <button onclick="App.restartWanTunnel('cloudflare')" class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-[11px] font-medium flex items-center gap-1 transition">
-                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                            <span>เปิด/รีเฟรชออนไลน์</span>
-                        </button>
-                        <button onclick="App.stopWanTunnel()" class="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold flex items-center gap-1 shadow-sm transition" title="ปิดการเชื่อมต่อจากภายนอกทันที">
-                            <i data-lucide="power" class="w-3 h-3"></i>
-                            <span>ปิดออนไลน์</span>
+
+                    <!-- Footer: Kick incoming controller if anyone is connected to this PC -->
+                    <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                        <span id="host-status-text">พร้อมรับการเชื่อมต่อ</span>
+                        <button onclick="App.disconnectAllSessions()" class="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-600 hover:text-white text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 font-bold flex items-center gap-1.5 transition">
+                            <i data-lucide="power-off" class="w-3.5 h-3.5"></i>
+                            <span>รีเซ็ต / ตัดผู้ควบคุม</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <!-- Device ID Box -->
-                    <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                            <span>รหัสประจำเครื่อง 9 หลัก (Device ID)</span>
-                            <button onclick="App.copyText(App.systemInfo?.device_id || '')" class="text-rose-600 hover:underline flex items-center gap-1">
-                                <i data-lucide="copy" class="w-3 h-3"></i> คัดลอก
-                            </button>
+                <!-- CARD 2: ควบคุมเครื่องปลายทาง (Enter Partner ID & Password to Control) -->
+                <div class="app-card p-6 lg:p-8 flex flex-col justify-between space-y-6 border border-slate-200/90 dark:border-slate-800 shadow-xl">
+                    <div class="space-y-5">
+                        <div class="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                            <div class="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 flex items-center justify-center shrink-0">
+                                <i data-lucide="mouse-pointer-click" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-base lg:text-lg font-bold text-slate-800 dark:text-white">ควบคุมเครื่องปลายทาง</h2>
+                                <p class="text-xs text-slate-400">กรอกรหัส ID และ Password ของเครื่องปลายทางที่คุณต้องการควบคุม</p>
+                            </div>
                         </div>
-                        <div id="card-device-id" class="text-2xl font-bold font-mono-num tracking-wider text-slate-800 dark:text-white">--- --- ---</div>
-                        <div id="card-os-info" class="text-[11px] text-slate-400 mt-1">หมายเลขสำหรับค้นหาเครื่องนี้</div>
-                    </div>
 
-                    <!-- PIN Box -->
-                    <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
-                            <span>รหัสผ่านความปลอดภัย 6 หลัก (PIN Code)</span>
-                            <button onclick="App.regeneratePin()" class="text-indigo-600 hover:underline flex items-center gap-1">
-                                <i data-lucide="refresh-cw" class="w-3 h-3"></i> สุ่มใหม่
-                            </button>
+                        <!-- Waiting for Host Approval Box -->
+                        <div id="approval-waiting-box" class="hidden p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 space-y-1.5">
+                            <div class="flex items-center gap-2 text-xs font-bold">
+                                <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0"></span>
+                                <span>กำลังรอเครื่องปลายทางกด "ยอมรับ (Accept)"...</span>
+                            </div>
+                            <p class="text-[11px] opacity-80">มีป๊อปอัปเด้งขึ้นที่หน้าจอเครื่องปลายทางแล้ว หรือกรอก Password ด้านล่างเพื่อเข้าทันที</p>
                         </div>
-                        <div class="flex items-center justify-between">
-                            <div id="card-pin-code" class="text-2xl font-bold font-mono-num tracking-widest text-rose-600">******</div>
-                            <label class="inline-flex items-center cursor-pointer text-xs gap-1.5">
-                                <input id="toggle-require-pin" type="checkbox" onchange="App.toggleRequirePin(this.checked)" class="sr-only peer">
-                                <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative peer-checked:bg-rose-600"></div>
-                                <span class="text-slate-500 text-[11px]">ล็อก PIN</span>
+
+                        <!-- Target ID Input -->
+                        <div class="space-y-1.5">
+                            <label for="partner-id-input" class="block text-xs font-bold text-slate-600 dark:text-slate-300">
+                                รหัส ID เครื่องปลายทาง (Partner ID)
                             </label>
+                            <input id="partner-id-input" type="text" placeholder="เช่น 123 456 789"
+                                onkeydown="if(event.key==='Enter') document.getElementById('partner-pin-input')?.focus()"
+                                class="w-full px-4 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold font-mono-num tracking-wider focus:outline-none focus:border-rose-500 text-slate-800 dark:text-white" />
                         </div>
-                        <div class="text-[11px] text-slate-400 mt-1">ป้องกันการเข้าถึงโดยไม่ได้รับอนุญาต</div>
-                    </div>
-                </div>
 
-                <div class="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button onclick="App.switchTab('remote')" class="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-600 flex items-center gap-2.5 transition text-left">
-                        <i data-lucide="monitor" class="w-5 h-5 shrink-0"></i>
-                        <div>
-                            <div class="text-xs font-bold">เปิดจอรีโมท 60FPS</div>
-                            <div class="text-[10px] opacity-75">ควบคุมเมาส์ & คีย์บอร์ดแบบเรียลไทม์</div>
+                        <!-- Target Password Input -->
+                        <div class="space-y-1.5">
+                            <label for="partner-pin-input" class="block text-xs font-bold text-slate-600 dark:text-slate-300">
+                                รหัสผ่านเครื่องปลายทาง (Password)
+                            </label>
+                            <input id="partner-pin-input" type="password" inputmode="numeric" maxlength="12" placeholder="กรอกรหัสผ่าน 6 หลัก"
+                                onkeydown="if(event.key==='Enter') App.connectWithIdAndPassword()"
+                                class="w-full px-4 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold font-mono-num tracking-widest focus:outline-none focus:border-rose-500 text-slate-800 dark:text-white" />
                         </div>
-                    </button>
-                    <button onclick="App.switchTab('files')" class="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 text-indigo-600 flex items-center gap-2.5 transition text-left">
-                        <i data-lucide="folder-open" class="w-5 h-5 shrink-0"></i>
-                        <div>
-                            <div class="text-xs font-bold">โอนย้ายไฟล์อิสระ</div>
-                            <div class="text-[10px] opacity-75">รับ-ส่งไฟล์ความเร็วสูง หยุดชั่วคราว / รันต่อได้</div>
-                        </div>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Active Recent Transfers Preview on Dashboard -->
-            <div class="app-card p-4 lg:p-6">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-                    <div>
-                        <h3 class="text-sm lg:text-base font-bold flex items-center gap-2">
-                            <i data-lucide="activity" class="w-5 h-5 text-rose-600"></i>
-                            <span>รายการโอนย้ายไฟล์ล่าสุด</span>
-                        </h3>
-                        <p class="text-xs text-slate-400">ส่งไฟล์ข้ามเครื่องความเร็วสูง กดหยุดพักและรันต่อได้ตลอดเวลา</p>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="FileTransfer.triggerUploadDialog()" class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
-                            <i data-lucide="upload-cloud" class="w-4 h-4"></i>
-                            <span>+ เลือกไฟล์ส่งด่วน</span>
+
+                    <!-- Connect Action Buttons -->
+                    <div class="space-y-2.5 pt-2">
+                        <button onclick="App.connectWithIdAndPassword()" class="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-sm font-bold shadow-lg shadow-rose-500/25 flex items-center justify-center gap-2 transition">
+                            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                            <span>เชื่อมต่อควบคุมหน้าจอ (Connect)</span>
                         </button>
-                        <button onclick="App.switchTab('transfers')" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-xs font-medium transition">
-                            ดูทั้งหมด
+
+                        <button onclick="App.requestHostApproval()" class="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+                            <i data-lucide="bell-ring" class="w-3.5 h-3.5 text-emerald-500"></i>
+                            <span>ขอเชื่อมต่อโดยให้เครื่องปลายทางกด "ยอมรับ"</span>
                         </button>
                     </div>
                 </div>
-                <div id="dash-transfer-preview" class="space-y-2.5"></div>
+
             </div>
         </section>
 
@@ -731,27 +568,19 @@
             </div>
         </section>
 
-        <!-- ==================== MOBILE BOTTOM NAVIGATION BAR (Native App Feel on Phone!) ==================== -->
-        <nav id="mobile-bottom-nav" class="lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-1 py-1 shrink-0 z-20">
-            <button class="mobile-nav-btn active" data-tab="dashboard" onclick="App.switchTab('dashboard')">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-                <span>หน้าหลัก</span>
-            </button>
-            <button class="mobile-nav-btn" data-tab="remote" onclick="App.switchTab('remote')">
+        <!-- ==================== MOBILE BOTTOM NAVIGATION BAR (Shown ONLY when connected to a remote target!) ==================== -->
+        <nav id="mobile-bottom-nav" class="hidden lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 items-center justify-around px-1 py-1 shrink-0 z-20">
+            <button class="mobile-nav-btn active" data-tab="remote" onclick="App.switchTab('remote')">
                 <i data-lucide="monitor-play" class="w-5 h-5"></i>
                 <span>รีโมทจอ</span>
             </button>
             <button class="mobile-nav-btn" data-tab="files" onclick="App.switchTab('files')">
                 <i data-lucide="folder-sync" class="w-5 h-5"></i>
-                <span>จัดการไฟล์</span>
+                <span>โอนย้ายไฟล์</span>
             </button>
-            <button class="mobile-nav-btn" data-tab="transfers" onclick="App.switchTab('transfers')">
-                <i data-lucide="arrow-down-up" class="w-5 h-5"></i>
-                <span>โอนย้าย</span>
-            </button>
-            <button class="mobile-nav-btn" data-tab="settings" onclick="App.switchTab('settings')">
-                <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
-                <span>ตั้งค่า</span>
+            <button class="mobile-nav-btn text-red-600" onclick="RemoteViewer.disconnectSession()">
+                <i data-lucide="phone-off" class="w-5 h-5"></i>
+                <span>ตัดการเชื่อมต่อ</span>
             </button>
         </nav>
 
@@ -924,8 +753,8 @@
     <div id="toast-container" class="fixed bottom-16 lg:bottom-5 right-4 z-50 space-y-2 pointer-events-none"></div>
 
     <!-- Application Scripts -->
-    <script src="js/app.js?v=2.6.0"></script>
-    <script src="js/remote_viewer.js?v=2.6.0"></script>
-    <script src="js/file_transfer.js?v=2.6.0"></script>
+    <script src="js/app.js?v=2.7.0"></script>
+    <script src="js/remote_viewer.js?v=2.7.0"></script>
+    <script src="js/file_transfer.js?v=2.7.0"></script>
 </body>
 </html>
