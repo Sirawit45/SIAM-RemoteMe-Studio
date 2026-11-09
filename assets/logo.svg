@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#261738" />
+      <stop offset="50%" stop-color="#170f24" />
+      <stop offset="100%" stop-color="#0d0814" />
+    </linearGradient>
+    <linearGradient id="roseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff2e63" />
+      <stop offset="50%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#9f1239" />
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="screenGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#e11d48" stop-opacity="0.15" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Squircle App Icon Background -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgGrad)" stroke="#ffffff" stroke-opacity="0.12" stroke-width="6" />
+
+  <!-- Outer Ambient Glow Circle -->
+  <circle cx="256" cy="240" r="170" fill="url(#roseGrad)" opacity="0.14" filter="url(#glow)" />
+
+  <!-- Stylized Remote Monitor Frame -->
+  <rect x="88" y="108" width="336" height="228" rx="32" fill="url(#screenGlow)" stroke="url(#roseGrad)" stroke-width="16" />
+  <rect x="112" y="132" width="288" height="180" rx="16" fill="#120c1d" opacity="0.85" />
+
+  <!-- Wireless P2P Signal Arcs (Top Left inside screen) -->
+  <path d="M 142 252 A 52 52 0 0 1 194 200" fill="none" stroke="url(#cyanGrad)" stroke-width="12" stroke-linecap="round" />
+  <path d="M 142 216 A 88 88 0 0 1 230 164" fill="none" stroke="url(#cyanGrad)" stroke-width="12" stroke-linecap="round" opacity="0.75" />
+  <circle cx="148" cy="276" r="10" fill="#34d399" />
+
+  <!-- Dynamic Zero-Lag Cursor Arrow / Lightning Bolt Centerpiece -->
+  <g filter="url(#glow)">
+    <path d="M 236 156 L 368 214 L 298 238 L 336 296 L 304 316 L 266 258 L 228 294 Z" fill="url(#roseGrad)" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" />
+  </g>
+
+  <!-- Monitor Stand / Base with File Transfer Arrows -->
+  <path d="M 216 336 L 200 388 L 312 388 L 296 336" fill="none" stroke="#94a3b8" stroke-width="12" stroke-linejoin="round" />
+  <line x1="168" y1="388" x2="344" y2="388" stroke="url(#roseGrad)" stroke-width="14" stroke-linecap="round" />
+
+  <!-- Bottom Badge "SIAM 60FPS" Pill -->
+  <rect x="156" y="414" width="200" height="40" rx="20" fill="#e11d48" opacity="0.9" />
+  <text x="256" y="440" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-weight="bold" font-size="20" letter-spacing="3">SIAM 60FPS</text>
+</svg>
