@@ -30,6 +30,27 @@ const App = {
     },
 
     loadSavedHost() {
+        const params = new URLSearchParams(window.location.search);
+        const queryId = params.get('id');
+        if (queryId) {
+            const input = document.getElementById('remote-host-input');
+            if (input) input.value = queryId;
+            localStorage.setItem('remoteme_saved_device_id', queryId);
+            setTimeout(() => this.connectToTargetHost(), 200);
+            return;
+        }
+
+        // If opened on the permanent GitHub Pages Mobile App Portal, auto-connect to last saved Device ID
+        if (window.location.hostname.endsWith('github.io')) {
+            const savedId = localStorage.getItem('remoteme_saved_device_id');
+            if (savedId) {
+                const input = document.getElementById('remote-host-input');
+                if (input) input.value = savedId;
+                setTimeout(() => this.connectToTargetHost(), 200);
+                return;
+            }
+        }
+
         const saved = sessionStorage.getItem('remoteme_target_origin');
         if (saved && saved !== window.location.origin) {
             this.targetOrigin = saved;
@@ -39,6 +60,29 @@ const App = {
         }
     },
 
+    async resolveDeviceIdClientSide(digitsOnly) {
+        const msgBuffer = new TextEncoder().encode(`siam_remoteme_v2_${digitsOnly}`);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const digest = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+        const topic = `siam_rm_${digitsOnly}_${digest}`;
+
+        const res = await fetch(`https://ntfy.sh/${topic}/json?poll=1&since=24h`);
+        if (!res.ok) return null;
+        const text = await res.text();
+        const lines = text.trim().split('\n').reverse();
+        for (const line of lines) {
+            try {
+                const evt = JSON.parse(line);
+                if (evt.event === 'message' && evt.message) {
+                    const data = JSON.parse(evt.message);
+                    if (data.public_url) return data;
+                }
+            } catch (e) {}
+        }
+        return null;
+    },
+
     async connectToTargetHost() {
         const raw = document.getElementById('remote-host-input')?.value.trim();
         if (!raw) {
@@ -46,22 +90,22 @@ const App = {
             return;
         }
 
-        // Check if input is a 9-digit Device ID (e.g. "123 456 789" or "123-456-789" or "123456789")
+        // Check if input is a 9-digit Device ID
         const digitsOnly = raw.replace(/[^0-9]/g, '');
         if (digitsOnly.length === 9 && !raw.includes('.') && !raw.includes(':')) {
-            this.toast(`กำลังค้นหาเครื่องรหัส ${digitsOnly.slice(0,3)}-${digitsOnly.slice(3,6)}-${digitsOnly.slice(6)} บนเครือข่ายอินเทอร์เน็ตทั่วโลก...`, 'info');
+            const formattedId = `${digitsOnly.slice(0,3)}-${digitsOnly.slice(3,6)}-${digitsOnly.slice(6)}`;
+            localStorage.setItem('remoteme_saved_device_id', formattedId);
+            this.toast(`กำลังค้นหาเครื่องรหัส ${formattedId} บนเครือข่ายอินเทอร์เน็ตทั่วโลก...`, 'info');
             try {
-                const res = await fetch(`${window.location.origin}/api/wan/resolve?device_id=${encodeURIComponent(digitsOnly)}`);
-                if (!res.ok) {
-                    const err = await res.json();
-                    this.toast(err.detail || 'ไม่พบรหัสเครื่องนี้ออนไลน์อยู่', 'error');
+                const record = await this.resolveDeviceIdClientSide(digitsOnly);
+                if (!record || !record.public_url) {
+                    this.toast('ไม่พบรหัสเครื่องนี้ออนไลน์อยู่ กรุณาตรวจสอบว่าเปิดโปรแกรมที่เครื่องปลายทางแล้ว', 'error');
                     return;
                 }
-                const record = await res.json();
                 this.applyTargetOrigin(record.public_url, record.device_name);
                 return;
             } catch (e) {
-                this.toast('ไม่สามารถค้นหารหัสเครื่องผ่านอินเทอร์เน็ตได้ กรุณาตรวจสอบการเชื่อมต่อเน็ต', 'error');
+                this.toast('ไม่สามารถค้นหารหัสเครื่องผ่านอินเทอร์เน็ตได้', 'error');
                 return;
             }
         }
