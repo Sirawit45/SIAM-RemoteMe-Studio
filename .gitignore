@@ -1,0 +1,19 @@
+# Python & Build Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.spec
+
+# Runtime & Local Config
+.temp_uploads/
+remoteme_config.json
+launch_hidden.vbs
+
+# Large Binaries (Auto-downloaded on first run or available in GitHub Releases)
+bin/
+Portable_Package/bin/
+Portable_Package/SIAM_RemoteMe_Portable.exe
+SIAM_RemoteMe_Portable.exe
+SIAM_RemoteMe_Portable_Package.zip
