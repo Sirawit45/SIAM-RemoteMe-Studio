@@ -68,6 +68,9 @@ const RemoteViewer = {
     },
 
     reconnect() {
+        this.manualDisconnect = false;
+        document.getElementById('remote-disconnected-overlay')?.classList.add('hidden');
+        document.getElementById('remote-disconnected-overlay')?.classList.remove('flex');
         if (this.ws) {
             try { this.ws.close(); } catch (e) {}
             this.ws = null;
@@ -75,7 +78,35 @@ const RemoteViewer = {
         this.connect();
     },
 
+    disconnectSession() {
+        this.manualDisconnect = true;
+        this.isConnected = false;
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+        if (this.gpuActive) {
+            this.stopGpuWebRtcCapture();
+        }
+        if (this.ws) {
+            try { this.ws.close(); } catch (e) {}
+            this.ws = null;
+        }
+        const overlay = document.getElementById('remote-disconnected-overlay');
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        }
+        App.toast('หยุดการเชื่อมต่อหน้าจอรีโมทแล้ว', 'info');
+    },
+
+    resumeSession() {
+        this.reconnect();
+        App.toast('กำลังเชื่อมต่อหน้าจอรีโมทอีกครั้ง...', 'info');
+    },
+
     connect() {
+        if (this.manualDisconnect) return;
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
             return;
         }
@@ -86,6 +117,11 @@ const RemoteViewer = {
 
         ws.onopen = () => {
             this.isConnected = true;
+            const overlay = document.getElementById('remote-disconnected-overlay');
+            if (overlay) {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
             if (this.pingInterval) clearInterval(this.pingInterval);
             this.pingInterval = setInterval(() => {
                 if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -104,9 +140,11 @@ const RemoteViewer = {
 
         ws.onclose = () => {
             this.isConnected = false;
-            setTimeout(() => {
-                if (!this.isConnected) this.connect();
-            }, 2500);
+            if (!this.manualDisconnect) {
+                setTimeout(() => {
+                    if (!this.isConnected && !this.manualDisconnect) this.connect();
+                }, 2500);
+            }
         };
     },
 
@@ -155,6 +193,9 @@ const RemoteViewer = {
                     this.sendJson({ type: 'auth', pin: this.lastAttemptedPin });
                 }
             }
+        } else if (msg.type === 'force_disconnect') {
+            this.disconnectSession();
+            App.toast(msg.reason || 'การเชื่อมต่อถูกตัดโดยเจ้าของเครื่อง', 'warning');
         } else if (msg.type === 'pong') {
             const rtt = Math.max(1, Date.now() - (msg.client_ts || Date.now()));
             this.currentRtt = rtt;
