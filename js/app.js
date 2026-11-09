@@ -7,16 +7,29 @@ const App = {
     systemInfo: null,
     isDark: false,
     pollTimer: null,
+    approvalPollTimer: null,
+    activeRequestId: null,
+    activeHostModalReqId: null,
+    authToken: sessionStorage.getItem('remoteme_auth_token') || null,
+    isDisconnected: false,
+
+    isLocalHostConsole() {
+        const h = window.location.hostname;
+        return (h === 'localhost' || h === '127.0.0.1') && this.targetOrigin === window.location.origin;
+    },
 
     init() {
         lucide.createIcons();
-        if (sessionStorage.getItem('remoteme_disconnected') === '1') {
+        this.loadSavedHost();
+
+        // If on remote device (phone / external PC) and disconnected or not yet authorized, start on Lock Screen!
+        if (sessionStorage.getItem('remoteme_disconnected') === '1' || (!this.isLocalHostConsole() && !this.authToken)) {
             FileTransfer.init();
             RemoteViewer.init();
-            this.enterDisconnectedState();
+            this.enterDisconnectedState(true);
             return;
         }
-        this.loadSavedHost();
+
         this.fetchSystemInfo();
         this.pollTimer = setInterval(() => this.fetchSystemInfo(), 2500);
 
@@ -26,7 +39,10 @@ const App = {
     },
 
     getApiUrl(path) {
-        return `${this.targetOrigin}${path}`;
+        const base = `${this.targetOrigin}${path}`;
+        if (!this.authToken) return base;
+        const sep = path.includes('?') ? '&' : '?';
+        return `${base}${sep}token=${encodeURIComponent(this.authToken)}`;
     },
 
     getWsUrl(path) {
@@ -41,27 +57,22 @@ const App = {
         if (queryId) {
             const input = document.getElementById('remote-host-input');
             if (input) input.value = queryId;
+            const lockInput = document.getElementById('reconnect-host-input');
+            if (lockInput) lockInput.value = queryId;
             localStorage.setItem('remoteme_saved_device_id', queryId);
-            setTimeout(() => this.connectToTargetHost(), 200);
-            return;
         }
 
-        // If opened on the permanent GitHub Pages Mobile App Portal, auto-connect to last saved Device ID
-        if (window.location.hostname.endsWith('github.io')) {
-            const savedId = localStorage.getItem('remoteme_saved_device_id');
-            if (savedId) {
-                const input = document.getElementById('remote-host-input');
-                if (input) input.value = savedId;
-                setTimeout(() => this.connectToTargetHost(), 200);
-                return;
-            }
+        const savedId = localStorage.getItem('remoteme_saved_device_id');
+        if (savedId) {
+            const input = document.getElementById('remote-host-input');
+            if (input && !input.value) input.value = savedId;
+            const lockInput = document.getElementById('reconnect-host-input');
+            if (lockInput && !lockInput.value) lockInput.value = savedId;
         }
 
         const saved = sessionStorage.getItem('remoteme_target_origin');
         if (saved && saved !== window.location.origin) {
             this.targetOrigin = saved;
-            const input = document.getElementById('remote-host-input');
-            if (input) input.value = saved.replace(/^https?:\/\//, '');
             document.getElementById('btn-reset-localhost')?.classList.remove('hidden');
         }
     },
@@ -89,31 +100,26 @@ const App = {
         return null;
     },
 
-    async connectToTargetHost() {
-        const raw = document.getElementById('remote-host-input')?.value.trim();
+    async resolveInputToOrigin(rawInput) {
+        const raw = (rawInput || '').trim();
         if (!raw) {
-            this.toast('กรุณาใส่รหัสเครื่อง 9 หลัก (เช่น 123 456 789) หรือลิงก์/IP เครื่องปลายทาง', 'warning');
-            return;
+            if (!window.location.hostname.endsWith('github.io')) {
+                return this.targetOrigin || window.location.origin;
+            }
+            return null;
         }
 
-        // Check if input is a 9-digit Device ID
         const digitsOnly = raw.replace(/[^0-9]/g, '');
         if (digitsOnly.length === 9 && !raw.includes('.') && !raw.includes(':')) {
             const formattedId = `${digitsOnly.slice(0,3)}-${digitsOnly.slice(3,6)}-${digitsOnly.slice(6)}`;
             localStorage.setItem('remoteme_saved_device_id', formattedId);
-            this.toast(`กำลังค้นหาเครื่องรหัส ${formattedId} บนเครือข่ายอินเทอร์เน็ตทั่วโลก...`, 'info');
-            try {
-                const record = await this.resolveDeviceIdClientSide(digitsOnly);
-                if (!record || !record.public_url) {
-                    this.toast('ไม่พบรหัสเครื่องนี้ออนไลน์อยู่ กรุณาตรวจสอบว่าเปิดโปรแกรมที่เครื่องปลายทางแล้ว', 'error');
-                    return;
-                }
-                this.applyTargetOrigin(record.public_url, record.device_name);
-                return;
-            } catch (e) {
-                this.toast('ไม่สามารถค้นหารหัสเครื่องผ่านอินเทอร์เน็ตได้', 'error');
-                return;
+            this.toast(`กำลังค้นหาเครื่องรหัส ${formattedId}...`, 'info');
+            const record = await this.resolveDeviceIdClientSide(digitsOnly);
+            if (!record || !record.public_url) {
+                this.toast('ไม่พบรหัสเครื่องนี้ออนไลน์อยู่ กรุณาตรวจสอบว่าเปิดโปรแกรมที่เครื่องปลายทางแล้ว', 'error');
+                return null;
             }
+            return record.public_url.replace(/\/+$/, '');
         }
 
         let formatted = raw;
@@ -127,20 +133,133 @@ const App = {
         if (formatted.startsWith('http://') && !formatted.includes(':', 6) && !formatted.includes('.trycloudflare.com')) {
             formatted += ':8765';
         }
-        this.applyTargetOrigin(formatted.replace(/\/+$/, ''));
+        return formatted.replace(/\/+$/, '');
     },
 
-    applyTargetOrigin(originUrl, label = '') {
-        this.exitDisconnectedState();
+    async connectToTargetHost() {
+        const raw = document.getElementById('remote-host-input')?.value.trim() ||
+                    document.getElementById('reconnect-host-input')?.value.trim();
+        const lockInput = document.getElementById('reconnect-host-input');
+        if (raw && lockInput) lockInput.value = raw;
+
+        const originUrl = await this.resolveInputToOrigin(raw);
+        if (!originUrl) return;
+
         this.targetOrigin = originUrl;
         sessionStorage.setItem('remoteme_target_origin', this.targetOrigin);
-        document.getElementById('btn-reset-localhost')?.classList.remove('hidden');
+
+        // Always require fresh approval or PIN when connecting to a target host!
+        this.enterDisconnectedState(true);
+        await this.requestHostApproval();
+    },
+
+    async requestHostApproval() {
+        const raw = document.getElementById('reconnect-host-input')?.value.trim() ||
+                    document.getElementById('remote-host-input')?.value.trim();
+        const originUrl = await this.resolveInputToOrigin(raw);
+        if (!originUrl) {
+            this.toast('กรุณาใส่รหัสเครื่อง 9 หลัก (เช่น 916-479-992) ก่อนส่งคำขอเชื่อมต่อ', 'warning');
+            return;
+        }
+        this.targetOrigin = originUrl;
+        sessionStorage.setItem('remoteme_target_origin', this.targetOrigin);
+
+        try {
+            const res = await fetch(`${this.targetOrigin}/api/auth/request`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok || !data.request_id) {
+                throw new Error(data.detail || 'ไม่สามารถส่งคำขอเชื่อมต่อได้');
+            }
+
+            this.activeRequestId = data.request_id;
+            document.getElementById('approval-waiting-box')?.classList.remove('hidden');
+            this.toast(`ส่งคำขอไปที่เครื่อง "${data.device_name || 'ปลายทาง'}" แล้ว กรุณากดยอมรับที่หน้าจอคอม หรือกรอกรหัส PIN`, 'info');
+
+            if (this.approvalPollTimer) clearInterval(this.approvalPollTimer);
+            this.approvalPollTimer = setInterval(() => this.checkApprovalStatus(), 1200);
+        } catch (e) {
+            this.toast('ไม่สามารถติดต่อเครื่องปลายทางได้ กรุณาตรวจสอบว่าเปิดโปรแกรมอยู่ที่คอมพิวเตอร์', 'error');
+        }
+    },
+
+    async checkApprovalStatus() {
+        if (!this.activeRequestId) return;
+        try {
+            const res = await fetch(`${this.targetOrigin}/api/auth/request-status?request_id=${encodeURIComponent(this.activeRequestId)}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.status === 'approved' && data.token) {
+                if (this.approvalPollTimer) {
+                    clearInterval(this.approvalPollTimer);
+                    this.approvalPollTimer = null;
+                }
+                this.activeRequestId = null;
+                document.getElementById('approval-waiting-box')?.classList.add('hidden');
+                this.toast('เครื่องปลายทางกดยอมรับการเชื่อมต่อแล้ว!', 'success');
+                this.completeAuthorization(data.token);
+            } else if (data.status === 'rejected') {
+                if (this.approvalPollTimer) {
+                    clearInterval(this.approvalPollTimer);
+                    this.approvalPollTimer = null;
+                }
+                this.activeRequestId = null;
+                document.getElementById('approval-waiting-box')?.classList.add('hidden');
+                this.toast('เครื่องปลายทางปฏิเสธคำขอเชื่อมต่อ', 'error');
+            }
+        } catch (e) {}
+    },
+
+    async reconnectWithPin() {
+        const pin = document.getElementById('reconnect-pin-input')?.value.trim();
+        if (!pin) {
+            this.toast('กรุณากรอกรหัส PIN 6 หลัก', 'warning');
+            return;
+        }
+        const raw = document.getElementById('reconnect-host-input')?.value.trim() ||
+                    document.getElementById('remote-host-input')?.value.trim();
+        const originUrl = await this.resolveInputToOrigin(raw);
+        if (!originUrl) {
+            this.toast('กรุณาใส่รหัสเครื่อง 9 หลักก่อนยืนยันรหัส PIN', 'warning');
+            return;
+        }
+        this.targetOrigin = originUrl;
+        sessionStorage.setItem('remoteme_target_origin', this.targetOrigin);
+
+        try {
+            const res = await fetch(`${this.targetOrigin}/api/auth/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.authenticated) {
+                this.toast(data.detail || 'รหัส PIN 6 หลักไม่ถูกต้อง', 'error');
+                return;
+            }
+            const pinInput = document.getElementById('reconnect-pin-input');
+            if (pinInput) pinInput.value = '';
+            this.toast('ยืนยันรหัส PIN สำเร็จ เชื่อมต่อเครื่องปลายทางแล้ว!', 'success');
+            this.completeAuthorization(data.token);
+        } catch (e) {
+            this.toast('ไม่สามารถตรวจสอบรหัส PIN กับเครื่องปลายทางได้', 'error');
+        }
+    },
+
+    completeAuthorization(token) {
+        if (this.approvalPollTimer) {
+            clearInterval(this.approvalPollTimer);
+            this.approvalPollTimer = null;
+        }
+        this.activeRequestId = null;
+        document.getElementById('approval-waiting-box')?.classList.add('hidden');
+
+        this.authToken = token;
+        sessionStorage.setItem('remoteme_auth_token', token);
+        this.exitDisconnectedState();
 
         if (!this.pollTimer) {
             this.pollTimer = setInterval(() => this.fetchSystemInfo(), 2500);
         }
-
-        this.toast(`กำลังเชื่อมต่อเครื่องปลายทาง ${label ? `(${label})` : ''}: ${this.targetOrigin}`, 'success');
         this.fetchSystemInfo();
         FileTransfer.loadLocations();
         FileTransfer.loadDirectory('');
@@ -148,12 +267,12 @@ const App = {
     },
 
     resetToLocalHost() {
-        this.exitDisconnectedState();
         this.targetOrigin = window.location.origin;
         sessionStorage.removeItem('remoteme_target_origin');
         const input = document.getElementById('remote-host-input');
         if (input) input.value = '';
         document.getElementById('btn-reset-localhost')?.classList.add('hidden');
+        this.exitDisconnectedState();
         if (!this.pollTimer) {
             this.pollTimer = setInterval(() => this.fetchSystemInfo(), 2500);
         }
@@ -162,26 +281,6 @@ const App = {
         FileTransfer.loadLocations();
         FileTransfer.loadDirectory('');
         RemoteViewer.reconnect();
-    },
-
-    reconnectFromLockScreen() {
-        const lockInput = document.getElementById('reconnect-host-input')?.value.trim();
-        const headerInput = document.getElementById('remote-host-input');
-        if (lockInput && headerInput) {
-            headerInput.value = lockInput;
-        }
-        this.exitDisconnectedState();
-        if (headerInput && headerInput.value.trim()) {
-            this.connectToTargetHost();
-        } else {
-            if (!this.pollTimer) {
-                this.pollTimer = setInterval(() => this.fetchSystemInfo(), 2500);
-            }
-            this.fetchSystemInfo();
-            FileTransfer.loadLocations();
-            FileTransfer.loadDirectory('');
-            RemoteViewer.reconnect();
-        }
     },
 
     exitDisconnectedState() {
@@ -198,15 +297,38 @@ const App = {
         this.switchTab(this.currentTab || 'dashboard');
     },
 
-    enterDisconnectedState() {
+    async enterDisconnectedState(skipServerLogout = false) {
+        if (!skipServerLogout && this.authToken) {
+            try {
+                await fetch(`${this.targetOrigin}/api/auth/logout`, {
+                    method: 'POST',
+                    headers: { 'X-RemoteMe-Token': this.authToken },
+                });
+            } catch (e) {}
+        }
+
         this.isDisconnected = true;
         this.systemInfo = null;
+        this.authToken = null;
+        sessionStorage.removeItem('remoteme_auth_token');
         sessionStorage.setItem('remoteme_disconnected', '1');
+
+        // Also clear any previously saved PIN in localStorage so reconnect ALWAYS requires new PIN or Host Popup Approval!
+        Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('remoteme_saved_pin_')) {
+                localStorage.removeItem(k);
+            }
+        });
+
         if (this.pollTimer) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
         }
-        sessionStorage.removeItem('remoteme_target_origin');
+        if (this.approvalPollTimer) {
+            clearInterval(this.approvalPollTimer);
+            this.approvalPollTimer = null;
+        }
+        document.getElementById('approval-waiting-box')?.classList.add('hidden');
 
         // Hide ALL 5 tabs and mobile bottom nav so nothing (CPU, IP, Files, Controls) can be viewed
         ['dashboard', 'remote', 'files', 'transfers', 'settings'].forEach(t => {
@@ -225,6 +347,8 @@ const App = {
         const savedId = localStorage.getItem('remoteme_saved_device_id') || '';
         const lockInput = document.getElementById('reconnect-host-input');
         if (lockInput && !lockInput.value) lockInput.value = savedId;
+        const pinInput = document.getElementById('reconnect-pin-input');
+        if (pinInput) pinInput.value = '';
 
         // Clear all File Explorer data immediately
         if (typeof FileTransfer !== 'undefined' && FileTransfer.clearAllData) {
@@ -256,13 +380,12 @@ const App = {
 
         const wanUrlEl = document.getElementById('wan-public-url');
         const wanDotEl = document.getElementById('wan-status-dot');
-        if (wanUrlEl) wanUrlEl.textContent = 'ตัดการเชื่อมต่อแล้ว — กรุณาใส่รหัส 9 หลักด้านบนแล้วกด "เชื่อมต่อ"';
+        if (wanUrlEl) wanUrlEl.textContent = 'ตัดการเชื่อมต่อแล้ว';
         if (wanDotEl) wanDotEl.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
 
         const urlList = document.getElementById('network-url-list');
-        if (urlList) {
-            urlList.innerHTML = '';
-        }
+        if (urlList) urlList.innerHTML = '';
+        lucide.createIcons();
     },
 
     openMobileDrawer() {
@@ -278,7 +401,7 @@ const App = {
     switchTab(tabName) {
         if (this.isDisconnected) {
             this.closeMobileDrawer();
-            this.toast('ตัดการเชื่อมต่อแล้ว กรุณากดเชื่อมต่อใหม่ก่อนเข้าใช้งาน', 'warning');
+            this.toast('กรุณายืนยันการเชื่อมต่อใหม่ก่อนเข้าใช้งาน', 'warning');
             return;
         }
         this.currentTab = tabName;
@@ -294,7 +417,6 @@ const App = {
             el.classList.toggle('active', el.dataset.tab === tabName);
         });
 
-        // On mobile screens, hide the top header when in Remote Desktop tab to maximize screen area
         const topHeader = document.getElementById('main-top-header');
         if (topHeader) {
             if (tabName === 'remote') {
@@ -329,6 +451,11 @@ const App = {
         if (this.isDisconnected) return;
         try {
             const res = await fetch(this.getApiUrl('/api/system/info'));
+            if (res.status === 401) {
+                // Unauthorized -> immediately lock screen!
+                RemoteViewer.disconnectSession();
+                return;
+            }
             if (!res.ok) throw new Error('Host unreachable');
             if (this.isDisconnected) return;
             const data = await res.json();
@@ -347,6 +474,21 @@ const App = {
         const txt = document.getElementById('host-status-text');
         if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
         if (txt) txt.textContent = 'พร้อมเชื่อมต่อ (Online)';
+
+        // Check if there are pending incoming connection requests on the Host PC
+        const pending = data.pending_requests || [];
+        const approvalModal = document.getElementById('host-approval-modal');
+        if (pending.length > 0) {
+            const req = pending[0];
+            this.activeHostModalReqId = req.request_id;
+            this.setText('approval-device-info', `อุปกรณ์: ${req.device_label} • IP: ${req.client_ip}`);
+            approvalModal?.classList.remove('hidden');
+            approvalModal?.classList.add('flex');
+        } else if (this.activeHostModalReqId) {
+            this.activeHostModalReqId = null;
+            approvalModal?.classList.add('hidden');
+            approvalModal?.classList.remove('flex');
+        }
 
         const formattedId = (data.device_id || '').replace(/-/g, ' ');
         this.setText('sidebar-device-id', formattedId);
@@ -372,7 +514,6 @@ const App = {
             reqPinToggle.checked = !!data.config?.require_pin;
         }
 
-        // Render Global Internet (WAN) Tunnel state
         const wan = data.wan || {};
         const wanUrlEl = document.getElementById('wan-public-url');
         const wanDotEl = document.getElementById('wan-status-dot');
@@ -384,12 +525,11 @@ const App = {
                 wanUrlEl.textContent = 'กำลังเชื่อมต่ออุโมงค์คลาวด์ระดับโลก (ใช้เวลาประมาณ 3-6 วินาที)...';
                 wanDotEl.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
             } else {
-                wanUrlEl.textContent = wan.error_msg || 'คลิกปุ่ม "รีเฟรชลิงก์โลก" เพื่อเปิดใช้งานลิงก์ควบคุมข้ามอินเทอร์เน็ต';
+                wanUrlEl.textContent = wan.error_msg || 'คลิกปุ่ม "เปิด/รีเฟรช" เพื่อเปิดใช้งานลิงก์ควบคุมข้ามอินเทอร์เน็ต';
                 wanDotEl.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
             }
         }
 
-        // Populate Network Access URLs
         const urlList = document.getElementById('network-url-list');
         if (urlList && Array.isArray(data.addresses)) {
             urlList.innerHTML = data.addresses.map(addr => `
@@ -405,7 +545,6 @@ const App = {
             `).join('');
         }
 
-        // Sync settings form if not focused
         const setDevName = document.getElementById('set-device-name');
         if (setDevName && document.activeElement !== setDevName && !setDevName.dataset.loaded) {
             setDevName.value = data.device_name || '';
@@ -417,10 +556,28 @@ const App = {
             document.getElementById('set-allow-delete').checked = !!data.config?.allow_file_delete;
         }
 
-        // Update Monitors dropdown in Remote Viewer
         if (Array.isArray(data.monitors)) {
             RemoteViewer.updateMonitorList(data.monitors);
         }
+    },
+
+    async respondIncomingRequest(approved) {
+        if (!this.activeHostModalReqId) return;
+        const reqId = this.activeHostModalReqId;
+        this.activeHostModalReqId = null;
+        const approvalModal = document.getElementById('host-approval-modal');
+        approvalModal?.classList.add('hidden');
+        approvalModal?.classList.remove('flex');
+
+        try {
+            await fetch(this.getApiUrl('/api/auth/respond'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_id: reqId, approved }),
+            });
+            this.toast(approved ? 'อนุมัติให้อุปกรณ์เข้าเชื่อมต่อแล้ว' : 'ปฏิเสธคำขอเชื่อมต่อแล้ว', approved ? 'success' : 'warning');
+            this.fetchSystemInfo();
+        } catch (e) {}
     },
 
     async regeneratePin() {
@@ -442,8 +599,12 @@ const App = {
         try {
             await fetch(this.getApiUrl('/api/sessions/disconnect-all'), { method: 'POST' });
         } catch (e) {}
-        RemoteViewer.disconnectSession();
-        this.toast('ตัดการเชื่อมต่ออุปกรณ์ทั้งหมดและล้างข้อมูลเซสชันแล้ว', 'success');
+        if (!this.isLocalHostConsole()) {
+            RemoteViewer.disconnectSession();
+        } else {
+            this.toast('เตะอุปกรณ์ที่เชื่อมต่อเข้ามาทั้งหมดออกเรียบร้อยแล้ว', 'success');
+            this.fetchSystemInfo();
+        }
     },
 
     async toggleRequirePin(checked) {

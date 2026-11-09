@@ -166,26 +166,56 @@
         </header>
 
         <!-- ==================== GLOBAL DISCONNECTED LOCK SCREEN (Hides ALL CPU, IP, Files & Controls!) ==================== -->
-        <section id="global-disconnected-screen" class="flex-1 hidden flex-col items-center justify-center p-6 text-center bg-slate-50 dark:bg-slate-950 overflow-y-auto z-30">
+        <section id="global-disconnected-screen" class="flex-1 hidden flex-col items-center justify-center p-4 lg:p-6 text-center bg-slate-50 dark:bg-slate-950 overflow-y-auto z-30">
             <div class="app-card max-w-md w-full p-6 lg:p-8 space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800">
                 <div class="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
-                    <i data-lucide="phone-off" class="w-8 h-8"></i>
+                    <i data-lucide="shield-lock" class="w-8 h-8"></i>
                 </div>
                 <div>
-                    <h2 class="text-lg font-bold text-slate-800 dark:text-white">ตัดการเชื่อมต่อแล้ว</h2>
-                    <p class="text-xs text-slate-400 mt-1">ระบบได้ปิดการแสดงข้อมูลสถานะเครื่อง (CPU/RAM), ลิงก์ IP, การดูไฟล์ และการควบคุมทั้งหมดแล้ว</p>
+                    <h2 id="lock-screen-title" class="text-lg font-bold text-slate-800 dark:text-white">ยืนยันการเชื่อมต่อเครื่องปลายทาง</h2>
+                    <p id="lock-screen-subtitle" class="text-xs text-slate-400 mt-1">ระบบปิดซ่อนข้อมูลสถานะเครื่อง (CPU/RAM), ลิงก์ IP และไฟล์ทั้งหมดจนกว่าจะได้รับอนุญาต</p>
                 </div>
-                <div class="space-y-3 text-left pt-2">
+
+                <!-- Waiting for Host Approval Box -->
+                <div id="approval-waiting-box" class="hidden p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 space-y-2">
+                    <div class="flex items-center justify-center gap-2 text-xs font-bold">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+                        <span>กำลังรอเครื่องปลายทางกด "ยอมรับ (Accept)" บนหน้าจอคอม...</span>
+                    </div>
+                    <p class="text-[11px] opacity-80">มีป๊อปอัปเด้งขึ้นที่หน้าจอคอมพิวเตอร์แล้ว กดปุ่ม "ยอมรับ (Yes)" ที่เครื่องคอมเพื่อเข้าใช้งานทันที</p>
+                </div>
+
+                <div class="space-y-3 text-left pt-1">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">รหัสเครื่อง 9 หลัก (Device ID) หรือ IP เครื่องปลายทาง</label>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">1. รหัสเครื่อง 9 หลัก (Device ID) หรือ IP เครื่องปลายทาง</label>
                         <input id="reconnect-host-input" type="text" placeholder="เช่น 916-479-992"
-                            onkeydown="if(event.key==='Enter') App.reconnectFromLockScreen()"
                             class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-mono-num focus:outline-none focus:border-rose-500 text-slate-800 dark:text-slate-100" />
                     </div>
-                    <button onclick="App.reconnectFromLockScreen()" class="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-sm font-bold shadow-lg shadow-rose-500/25 flex items-center justify-center gap-2 transition">
-                        <i data-lucide="plug-zap" class="w-4 h-4"></i>
-                        <span>เชื่อมต่อใหม่อีกครั้ง</span>
+
+                    <!-- Option A: Request Host Popup Approval -->
+                    <button onclick="App.requestHostApproval()" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 transition">
+                        <i data-lucide="bell-ring" class="w-4 h-4"></i>
+                        <span>ส่งคำขอให้เครื่องปลายทางกด "ยอมรับ"</span>
                     </button>
+
+                    <div class="relative flex py-1 items-center">
+                        <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                        <span class="flex-shrink mx-3 text-[11px] text-slate-400">หรือ กรอกรหัส PIN 6 หลัก</span>
+                        <div class="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                    </div>
+
+                    <!-- Option B: Enter 6-Digit Security PIN -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">2. รหัสผ่านความปลอดภัย 6 หลัก (PIN Code)</label>
+                        <div class="flex gap-2">
+                            <input id="reconnect-pin-input" type="password" inputmode="numeric" maxlength="12" placeholder="กรอกรหัส PIN 6 หลัก"
+                                onkeydown="if(event.key==='Enter') App.reconnectWithPin()"
+                                class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-mono-num tracking-widest focus:outline-none focus:border-rose-500 text-slate-800 dark:text-slate-100" />
+                            <button onclick="App.reconnectWithPin()" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 shrink-0 transition">
+                                ยืนยัน PIN
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -917,12 +947,36 @@
         </div>
     </div>
 
+    <!-- ==================== MODAL 5: HOST INCOMING CONNECTION APPROVAL POPUP ==================== -->
+    <div id="host-approval-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="app-card w-full max-w-md p-6 text-center space-y-4 shadow-2xl border-2 border-emerald-500/40 animate-bounce-once">
+            <div class="w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto">
+                <i data-lucide="smartphone" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">คำขอเชื่อมต่อใหม่</span>
+                <h3 class="text-base lg:text-lg font-bold mt-2">มีอุปกรณ์ขอเชื่อมต่อเข้าควบคุมเครื่องนี้!</h3>
+                <p id="approval-device-info" class="text-xs text-slate-400 mt-1 font-mono-num">อุปกรณ์: iPhone • IP: ---</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <button onclick="App.respondIncomingRequest(false)" class="py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-lg transition">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i>
+                    <span>ปฏิเสธ (Reject)</span>
+                </button>
+                <button onclick="App.respondIncomingRequest(true)" class="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-lg transition">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                    <span>ยอมรับ (Accept)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed bottom-16 lg:bottom-5 right-4 z-50 space-y-2 pointer-events-none"></div>
 
     <!-- Application Scripts -->
-    <script src="js/app.js?v=2.3.0"></script>
-    <script src="js/remote_viewer.js?v=2.3.0"></script>
-    <script src="js/file_transfer.js?v=2.3.0"></script>
+    <script src="js/app.js?v=2.4.0"></script>
+    <script src="js/remote_viewer.js?v=2.4.0"></script>
+    <script src="js/file_transfer.js?v=2.4.0"></script>
 </body>
 </html>
