@@ -15,7 +15,7 @@ const FileTransfer = {
     CHUNK_SIZE: 1024 * 1024, // 1 MiB per chunk for smooth pause/resume & high throughput
 
     init() {
-        if (!App.isDisconnected) {
+        if (App.isRemoteConnected) {
             this.loadLocations();
             this.loadDirectory('');
         }
@@ -37,8 +37,8 @@ const FileTransfer = {
         if (driveEl) driveEl.innerHTML = '';
         const pathInput = document.getElementById('explorer-path-input');
         if (pathInput) pathInput.value = '';
-        const rowsEl = document.getElementById('explorer-file-rows');
-        if (rowsEl) rowsEl.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-xs text-slate-400">ตัดการเชื่อมต่อแล้ว ไม่สามารถดูไฟล์ได้</td></tr>`;
+        const listEl = document.getElementById('explorer-file-list');
+        if (listEl) listEl.innerHTML = `<div class="p-8 text-center text-xs text-slate-400">ตัดการเชื่อมต่อแล้ว ไม่สามารถดูไฟล์ได้</div>`;
     },
 
     formatBytes(bytes) {
