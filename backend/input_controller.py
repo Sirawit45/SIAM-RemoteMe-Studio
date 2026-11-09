@@ -89,6 +89,10 @@ class InputController:
     Ultra-low-latency cross-platform Mouse & Keyboard Input Controller.
     """
 
+    def __init__(self):
+        self.active_mouse_buttons = set()
+        self.active_keys = set()
+
     def _resolve_coords(self, norm_x: float, norm_y: float, monitor_id: int = 1) -> tuple[int, int]:
         bounds = screen_engine.get_monitor_bounds(monitor_id)
         norm_x = max(0.0, min(1.0, float(norm_x)))
@@ -113,6 +117,7 @@ class InputController:
         if norm_x is not None and norm_y is not None:
             self.move_mouse(norm_x, norm_y, monitor_id)
 
+        btn = (button or "left").lower()
         if IS_WINDOWS:
             user32 = ctypes.windll.user32
             btn_map = {
@@ -120,31 +125,45 @@ class InputController:
                 "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
                 "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
             }
-            down_flag, up_flag = btn_map.get(button, btn_map["left"])
+            down_flag, up_flag = btn_map.get(btn, btn_map["left"])
             if action == "down":
+                if btn in self.active_mouse_buttons:
+                    user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
+                self.active_mouse_buttons.add(btn)
             elif action == "up":
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
+                self.active_mouse_buttons.discard(btn)
             elif action == "click":
+                if btn in self.active_mouse_buttons:
+                    user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                time.sleep(0.02)
+                time.sleep(0.015)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
+                self.active_mouse_buttons.discard(btn)
             elif action == "dblclick":
+                if btn in self.active_mouse_buttons:
+                    user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
-                time.sleep(0.03)
+                time.sleep(0.02)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
+                self.active_mouse_buttons.discard(btn)
         elif HAS_PYNPUT:
-            p_btn = {"left": Button.left, "right": Button.right, "middle": Button.middle}.get(button, Button.left)
+            p_btn = {"left": Button.left, "right": Button.right, "middle": Button.middle}.get(btn, Button.left)
             if action == "down":
                 _mouse.press(p_btn)
+                self.active_mouse_buttons.add(btn)
             elif action == "up":
                 _mouse.release(p_btn)
+                self.active_mouse_buttons.discard(btn)
             elif action == "click":
                 _mouse.click(p_btn, 1)
+                self.active_mouse_buttons.discard(btn)
             elif action == "dblclick":
                 _mouse.click(p_btn, 2)
+                self.active_mouse_buttons.discard(btn)
 
     def scroll(self, delta_x: float = 0, delta_y: float = 0):
         if not config.allow_input_control:
@@ -272,30 +291,60 @@ class InputController:
         for k in reversed(keys):
             self.key_event("up", k, k)
 
+    def release_all(self):
+        """Safely release all active mouse buttons and modifier keys."""
+        if IS_WINDOWS:
+            user32 = ctypes.windll.user32
+            # Explicitly release left, right, middle
+            user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+            user32.mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0)
+            self.active_mouse_buttons.clear()
+
+            # Release common modifiers (Shift, Ctrl, Alt, Win)
+            for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5):
+                try:
+                    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+                except Exception:
+                    pass
+            self.active_keys.clear()
+        elif HAS_PYNPUT:
+            try:
+                for b in (Button.left, Button.right, Button.middle):
+                    _mouse.release(b)
+                self.active_mouse_buttons.clear()
+            except Exception:
+                pass
+
     def handle_packet(self, msg: Dict[str, Any]):
-        """Dispatch incoming WebSocket / DataChannel input control packet."""
-        t = msg.get("type")
-        mon = int(msg.get("monitor", 1))
-        if t == "mousemove":
-            self.move_mouse(msg.get("x", 0), msg.get("y", 0), mon)
-        elif t in ("mousedown", "mouseup", "click", "dblclick"):
-            action = t.replace("mouse", "")
-            self.mouse_button(
-                action=action,
-                button=msg.get("button", "left"),
-                norm_x=msg.get("x"),
-                norm_y=msg.get("y"),
-                monitor_id=mon,
-            )
-        elif t == "wheel":
-            self.scroll(msg.get("dx", 0), msg.get("dy", 0))
-        elif t in ("keydown", "keyup", "keypress"):
-            action = t.replace("key", "")
-            self.key_event(action, msg.get("key", ""), msg.get("code", ""))
-        elif t == "text":
-            self.type_text(msg.get("text", ""))
-        elif t == "hotkey":
-            self.send_hotkey(msg.get("combo", ""))
+        """Dispatch incoming WebSocket / DataChannel input control packet safely."""
+        try:
+            t = msg.get("type")
+            mon = int(msg.get("monitor", 1))
+            if t == "mousemove":
+                self.move_mouse(msg.get("x", 0), msg.get("y", 0), mon)
+            elif t in ("mousedown", "mouseup", "click", "dblclick"):
+                action = t.replace("mouse", "")
+                self.mouse_button(
+                    action=action,
+                    button=msg.get("button", "left"),
+                    norm_x=msg.get("x"),
+                    norm_y=msg.get("y"),
+                    monitor_id=mon,
+                )
+            elif t == "wheel":
+                self.scroll(msg.get("dx", 0), msg.get("dy", 0))
+            elif t in ("keydown", "keyup", "keypress"):
+                action = t.replace("key", "")
+                self.key_event(action, msg.get("key", ""), msg.get("code", ""))
+            elif t == "text":
+                self.type_text(msg.get("text", ""))
+            elif t == "hotkey":
+                self.send_hotkey(msg.get("combo", ""))
+            elif t in ("release_all", "reset_input"):
+                self.release_all()
+        except Exception:
+            pass
 
 
 input_controller = InputController()

@@ -81,6 +81,7 @@ const RemoteViewer = {
     },
 
     disconnectSession() {
+        this.releaseAllPressedButtons();
         this.manualDisconnect = true;
         this.isConnected = false;
         document.body.classList.remove('immersive-fullscreen');
@@ -306,6 +307,15 @@ const RemoteViewer = {
         ctx.restore();
     },
 
+    releaseAllPressedButtons() {
+        if (!this.pressedButtons || this.pressedButtons.size === 0) return;
+        for (const btn of this.pressedButtons) {
+            this.sendJson({ type: 'mouseup', button: btn });
+        }
+        this.pressedButtons.clear();
+        this.sendJson({ type: 'release_all' });
+    },
+
     sendJson(obj) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(obj));
@@ -443,6 +453,26 @@ const RemoteViewer = {
 
     bindInputEvents() {
         const c = this.canvas;
+        this.pressedButtons = new Set();
+
+        c.setAttribute('draggable', 'false');
+        c.addEventListener('dragstart', (e) => e.preventDefault());
+
+        c.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'touch') return;
+            try { c.setPointerCapture(e.pointerId); } catch (_) {}
+        });
+
+        c.addEventListener('pointerup', (e) => {
+            if (e.pointerType === 'touch') return;
+            try { c.releasePointerCapture(e.pointerId); } catch (_) {}
+        });
+
+        c.addEventListener('pointercancel', (e) => {
+            if (e.pointerType === 'touch') return;
+            try { c.releasePointerCapture(e.pointerId); } catch (_) {}
+            this.releaseAllPressedButtons();
+        });
 
         c.addEventListener('mousemove', (e) => {
             this.isTouchActive = false;
@@ -453,26 +483,49 @@ const RemoteViewer = {
             this.lastLocalInputTime = performance.now();
 
             const now = performance.now();
-            if (now - this.lastMouseMoveTime < 24) return;
+            if (now - this.lastMouseMoveTime < 12) return;
             this.lastMouseMoveTime = now;
             this.sendJson({ type: 'mousemove', x, y });
         });
+
+        const btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
 
         c.addEventListener('mousedown', (e) => {
             c.focus();
             if (!this.inputEnabled) return;
             e.preventDefault();
-            const btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
+            const btn = btnMap[e.button] || 'left';
+            this.pressedButtons.add(btn);
             const { x, y } = this.getNormalizedCoords(e);
-            this.sendJson({ type: 'mousedown', button: btnMap[e.button] || 'left', x, y });
+            this.sendJson({ type: 'mousedown', button: btn, x, y });
         });
 
         c.addEventListener('mouseup', (e) => {
             if (!this.inputEnabled) return;
             e.preventDefault();
-            const btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
+            const btn = btnMap[e.button] || 'left';
+            this.pressedButtons.delete(btn);
             const { x, y } = this.getNormalizedCoords(e);
-            this.sendJson({ type: 'mouseup', button: btnMap[e.button] || 'left', x, y });
+            this.sendJson({ type: 'mouseup', button: btn, x, y });
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (!this.inputEnabled) return;
+            const btn = btnMap[e.button] || 'left';
+            if (this.pressedButtons.has(btn)) {
+                this.pressedButtons.delete(btn);
+                this.sendJson({ type: 'mouseup', button: btn });
+            }
+        });
+
+        window.addEventListener('blur', () => {
+            this.releaseAllPressedButtons();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.releaseAllPressedButtons();
+            }
         });
 
         c.addEventListener('dblclick', (e) => {
