@@ -42,11 +42,11 @@ const App = {
     async connectToTargetHost() {
         const raw = document.getElementById('remote-host-input')?.value.trim();
         if (!raw) {
-            this.toast('กรุณาใส่รหัสเครื่อง 9 หลัก (เช่น 865 557 579) หรือลิงก์/IP เครื่องปลายทาง', 'warning');
+            this.toast('กรุณาใส่รหัสเครื่อง 9 หลัก (เช่น 123 456 789) หรือลิงก์/IP เครื่องปลายทาง', 'warning');
             return;
         }
 
-        // Check if input is a 9-digit Device ID (e.g. "865 557 579" or "865-557-579" or "865557579")
+        // Check if input is a 9-digit Device ID (e.g. "123 456 789" or "123-456-789" or "123456789")
         const digitsOnly = raw.replace(/[^0-9]/g, '');
         if (digitsOnly.length === 9 && !raw.includes('.') && !raw.includes(':')) {
             this.toast(`กำลังค้นหาเครื่องรหัส ${digitsOnly.slice(0,3)}-${digitsOnly.slice(3,6)}-${digitsOnly.slice(6)} บนเครือข่ายอินเทอร์เน็ตทั่วโลก...`, 'info');
