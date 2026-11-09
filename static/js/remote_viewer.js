@@ -97,10 +97,16 @@ const RemoteViewer = {
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
         }
-        App.toast('หยุดการเชื่อมต่อหน้าจอรีโมทแล้ว', 'info');
+        App.enterDisconnectedState();
+        App.toast('หยุดการเชื่อมต่อและล้างข้อมูลเครื่องปลายทางแล้ว', 'info');
     },
 
     resumeSession() {
+        App.isDisconnected = false;
+        if (!App.pollTimer) {
+            App.pollTimer = setInterval(() => App.fetchSystemInfo(), 2500);
+        }
+        App.fetchSystemInfo();
         this.reconnect();
         App.toast('กำลังเชื่อมต่อหน้าจอรีโมทอีกครั้ง...', 'info');
     },
