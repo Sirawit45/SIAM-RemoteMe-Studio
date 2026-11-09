@@ -10,6 +10,12 @@ const App = {
 
     init() {
         lucide.createIcons();
+        if (sessionStorage.getItem('remoteme_disconnected') === '1') {
+            FileTransfer.init();
+            RemoteViewer.init();
+            this.enterDisconnectedState();
+            return;
+        }
         this.loadSavedHost();
         this.fetchSystemInfo();
         this.pollTimer = setInterval(() => this.fetchSystemInfo(), 2500);
@@ -125,7 +131,7 @@ const App = {
     },
 
     applyTargetOrigin(originUrl, label = '') {
-        this.isDisconnected = false;
+        this.exitDisconnectedState();
         this.targetOrigin = originUrl;
         sessionStorage.setItem('remoteme_target_origin', this.targetOrigin);
         document.getElementById('btn-reset-localhost')?.classList.remove('hidden');
@@ -142,7 +148,7 @@ const App = {
     },
 
     resetToLocalHost() {
-        this.isDisconnected = false;
+        this.exitDisconnectedState();
         this.targetOrigin = window.location.origin;
         sessionStorage.removeItem('remoteme_target_origin');
         const input = document.getElementById('remote-host-input');
@@ -158,14 +164,72 @@ const App = {
         RemoteViewer.reconnect();
     },
 
+    reconnectFromLockScreen() {
+        const lockInput = document.getElementById('reconnect-host-input')?.value.trim();
+        const headerInput = document.getElementById('remote-host-input');
+        if (lockInput && headerInput) {
+            headerInput.value = lockInput;
+        }
+        this.exitDisconnectedState();
+        if (headerInput && headerInput.value.trim()) {
+            this.connectToTargetHost();
+        } else {
+            if (!this.pollTimer) {
+                this.pollTimer = setInterval(() => this.fetchSystemInfo(), 2500);
+            }
+            this.fetchSystemInfo();
+            FileTransfer.loadLocations();
+            FileTransfer.loadDirectory('');
+            RemoteViewer.reconnect();
+        }
+    },
+
+    exitDisconnectedState() {
+        this.isDisconnected = false;
+        sessionStorage.removeItem('remoteme_disconnected');
+
+        const lockScreen = document.getElementById('global-disconnected-screen');
+        if (lockScreen) {
+            lockScreen.classList.add('hidden');
+            lockScreen.classList.remove('flex');
+        }
+        document.getElementById('mobile-bottom-nav')?.classList.remove('hidden');
+        document.getElementById('btn-header-disconnect')?.classList.remove('hidden');
+        this.switchTab(this.currentTab || 'dashboard');
+    },
+
     enterDisconnectedState() {
         this.isDisconnected = true;
         this.systemInfo = null;
+        sessionStorage.setItem('remoteme_disconnected', '1');
         if (this.pollTimer) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
         }
         sessionStorage.removeItem('remoteme_target_origin');
+
+        // Hide ALL 5 tabs and mobile bottom nav so nothing (CPU, IP, Files, Controls) can be viewed
+        ['dashboard', 'remote', 'files', 'transfers', 'settings'].forEach(t => {
+            document.getElementById(`tab-${t}`)?.classList.add('hidden');
+        });
+        document.getElementById('mobile-bottom-nav')?.classList.add('hidden');
+        document.getElementById('btn-header-disconnect')?.classList.add('hidden');
+        this.closeMobileDrawer();
+
+        // Show Global Disconnected Lock Screen
+        const lockScreen = document.getElementById('global-disconnected-screen');
+        if (lockScreen) {
+            lockScreen.classList.remove('hidden');
+            lockScreen.classList.add('flex');
+        }
+        const savedId = localStorage.getItem('remoteme_saved_device_id') || '';
+        const lockInput = document.getElementById('reconnect-host-input');
+        if (lockInput && !lockInput.value) lockInput.value = savedId;
+
+        // Clear all File Explorer data immediately
+        if (typeof FileTransfer !== 'undefined' && FileTransfer.clearAllData) {
+            FileTransfer.clearAllData();
+        }
 
         // Clear all host machine details from UI
         const dot = document.getElementById('host-status-dot');
@@ -173,7 +237,7 @@ const App = {
         if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
         if (txt) txt.textContent = 'ตัดการเชื่อมต่อแล้ว (Disconnected)';
 
-        this.setText('header-device-name', 'ไม่ได้เชื่อมต่อ (Disconnected)');
+        this.setText('header-device-name', 'ไม่ได้เชื่อมต่อ');
         this.setText('sidebar-device-id', '--- --- ---');
         this.setText('card-device-id', '--- --- ---');
         this.setText('card-os-info', 'ตัดการเชื่อมต่อจากเครื่องปลายทางแล้ว');
@@ -197,7 +261,7 @@ const App = {
 
         const urlList = document.getElementById('network-url-list');
         if (urlList) {
-            urlList.innerHTML = `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 text-xs text-slate-400 text-center">ตัดการเชื่อมต่อแล้ว (กดปุ่ม "เชื่อมต่อ" ด้านบนเมื่อต้องการใช้งานใหม่)</div>`;
+            urlList.innerHTML = '';
         }
     },
 
@@ -212,6 +276,11 @@ const App = {
     },
 
     switchTab(tabName) {
+        if (this.isDisconnected) {
+            this.closeMobileDrawer();
+            this.toast('ตัดการเชื่อมต่อแล้ว กรุณากดเชื่อมต่อใหม่ก่อนเข้าใช้งาน', 'warning');
+            return;
+        }
         this.currentTab = tabName;
         this.closeMobileDrawer();
 

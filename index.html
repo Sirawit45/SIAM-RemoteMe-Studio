@@ -158,12 +158,37 @@
                     <span class="hidden sm:inline">หยุดเชื่อมต่อ</span>
                 </button>
 
-                <button onclick="App.switchTab('remote')" class="hidden md:flex px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-semibold shadow-md shadow-rose-500/20 items-center gap-1.5 shrink-0 transition">
+                <button id="btn-header-open-remote" onclick="App.switchTab('remote')" class="hidden md:flex px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-semibold shadow-md shadow-rose-500/20 items-center gap-1.5 shrink-0 transition">
                     <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
                     <span>เปิดจอรีโมท</span>
                 </button>
             </div>
         </header>
+
+        <!-- ==================== GLOBAL DISCONNECTED LOCK SCREEN (Hides ALL CPU, IP, Files & Controls!) ==================== -->
+        <section id="global-disconnected-screen" class="flex-1 hidden flex-col items-center justify-center p-6 text-center bg-slate-50 dark:bg-slate-950 overflow-y-auto z-30">
+            <div class="app-card max-w-md w-full p-6 lg:p-8 space-y-5 shadow-2xl border border-slate-200 dark:border-slate-800">
+                <div class="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 text-red-500 flex items-center justify-center mx-auto">
+                    <i data-lucide="phone-off" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 dark:text-white">ตัดการเชื่อมต่อแล้ว</h2>
+                    <p class="text-xs text-slate-400 mt-1">ระบบได้ปิดการแสดงข้อมูลสถานะเครื่อง (CPU/RAM), ลิงก์ IP, การดูไฟล์ และการควบคุมทั้งหมดแล้ว</p>
+                </div>
+                <div class="space-y-3 text-left pt-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1.5">รหัสเครื่อง 9 หลัก (Device ID) หรือ IP เครื่องปลายทาง</label>
+                        <input id="reconnect-host-input" type="text" placeholder="เช่น 916-479-992"
+                            onkeydown="if(event.key==='Enter') App.reconnectFromLockScreen()"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-sm font-mono-num focus:outline-none focus:border-rose-500 text-slate-800 dark:text-slate-100" />
+                    </div>
+                    <button onclick="App.reconnectFromLockScreen()" class="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-sm font-bold shadow-lg shadow-rose-500/25 flex items-center justify-center gap-2 transition">
+                        <i data-lucide="plug-zap" class="w-4 h-4"></i>
+                        <span>เชื่อมต่อใหม่อีกครั้ง</span>
+                    </button>
+                </div>
+            </div>
+        </section>
 
         <!-- ==================== TAB 1: DASHBOARD & CONNECT ==================== -->
         <section id="tab-dashboard" class="flex-1 overflow-y-auto p-3.5 lg:p-6 space-y-4 lg:space-y-6">
@@ -728,7 +753,7 @@
         </section>
 
         <!-- ==================== MOBILE BOTTOM NAVIGATION BAR (Native App Feel on Phone!) ==================== -->
-        <nav class="lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-1 py-1 shrink-0 z-20">
+        <nav id="mobile-bottom-nav" class="lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-1 py-1 shrink-0 z-20">
             <button class="mobile-nav-btn active" data-tab="dashboard" onclick="App.switchTab('dashboard')">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
                 <span>หน้าหลัก</span>
@@ -896,8 +921,8 @@
     <div id="toast-container" class="fixed bottom-16 lg:bottom-5 right-4 z-50 space-y-2 pointer-events-none"></div>
 
     <!-- Application Scripts -->
-    <script src="js/app.js"></script>
-    <script src="js/remote_viewer.js"></script>
-    <script src="js/file_transfer.js"></script>
+    <script src="js/app.js?v=2.3.0"></script>
+    <script src="js/remote_viewer.js?v=2.3.0"></script>
+    <script src="js/file_transfer.js?v=2.3.0"></script>
 </body>
 </html>
