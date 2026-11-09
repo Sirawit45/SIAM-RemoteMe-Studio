@@ -2,11 +2,17 @@ import asyncio
 import json
 import mimetypes
 import os
+import socket
 import sys
 import time
 import urllib.parse
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException, Query
@@ -685,27 +691,52 @@ def _enable_prevent_sleep():
             pass
 
 
-def _open_desktop_app_window(port: int):
-    """Automatically launch Desktop App UI window when run as Portable .exe."""
+def _is_port_in_use(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.4)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _launch_app_window_now(port: int):
+    """Immediately open a standalone Desktop App window for http://localhost:{port}."""
     import shutil
     import subprocess
-    import threading
     import webbrowser
 
-    def _launch():
-        time.sleep(1.5)
-        url = f"http://localhost:{port}"
-        for browser_cmd in ("msedge", "chrome"):
-            exe = shutil.which(browser_cmd)
-            if exe:
-                try:
-                    subprocess.Popen([exe, f"--app={url}", "--window-size=1360,840"])
-                    return
-                except Exception:
-                    pass
+    url = f"http://localhost:{port}"
+    candidates = [
+        shutil.which("msedge"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        shutil.which("chrome"),
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    ]
+    for exe in candidates:
+        if exe and os.path.isfile(exe):
+            try:
+                subprocess.Popen([exe, f"--app={url}", "--window-size=1100,720"])
+                return
+            except Exception:
+                pass
+    try:
+        os.startfile(url)
+    except Exception:
         webbrowser.open(url)
 
-    threading.Thread(target=_launch, daemon=True).start()
+
+def _open_desktop_app_window(port: int):
+    """Wait until server port is listening, then launch the Desktop App window."""
+    import threading
+
+    def _wait_and_launch():
+        for _ in range(30):
+            if _is_port_in_use(port):
+                break
+            time.sleep(0.25)
+        _launch_app_window_now(port)
+
+    threading.Thread(target=_wait_and_launch, daemon=True).start()
 
 
 if __name__ == "__main__":
@@ -717,14 +748,22 @@ if __name__ == "__main__":
 
     _enable_prevent_sleep()
     port = int(os.environ.get("REMOTEME_PORT", config.port))
+
+    # If the server is ALREADY running in the background on this PC,
+    # double-clicking the Desktop icon should immediately pop open the UI window!
+    if _is_port_in_use(port):
+        if "--headless" not in sys.argv:
+            _launch_app_window_now(port)
+        sys.exit(0)
+
     print("=" * 68)
-    print(f" [SIAM RemoteMe Studio v2.0 - Portable Edition]")
+    print(f" [SIAM RemoteMe Studio v2.7 - Desktop & Portable Edition]")
     print(f" Device Name : {config.device_name}")
     print(f" Device ID   : {config.device_id}  |  PIN: {config.pin_code}")
     print(f" Local URL   : http://localhost:{port}")
     print("=" * 68)
 
-    if getattr(sys, "frozen", False) and "--headless" not in sys.argv:
+    if "--headless" not in sys.argv:
         _open_desktop_app_window(port)
 
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning", ws_max_size=16 * 1024 * 1024)

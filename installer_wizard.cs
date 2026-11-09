@@ -563,7 +563,7 @@ namespace SiamRemoteMeSetup
                         {
                             if (rk != null)
                             {
-                                rk.SetValue("SIAM_RemoteMe_Studio", "\"" + mainExe + "\"");
+                                rk.SetValue("SIAM_RemoteMe_Studio", "\"" + mainExe + "\" --headless");
                             }
                         }
                     }
