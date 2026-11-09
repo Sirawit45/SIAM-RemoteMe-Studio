@@ -127,6 +127,7 @@ class InputController:
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
             elif action == "click":
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
+                time.sleep(0.02)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
             elif action == "dblclick":
                 user32.mouse_event(down_flag, 0, 0, 0, 0)

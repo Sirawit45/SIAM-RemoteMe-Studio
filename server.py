@@ -596,12 +596,10 @@ async def ws_remote_endpoint(websocket: WebSocket):
                 elif mtype == "mousemove":
                     msg["monitor"] = state["monitor_id"]
                     input_controller.handle_packet(msg)
-                    ack_event.set()
 
                 elif mtype in ("mousedown", "mouseup", "click", "dblclick", "wheel", "keydown", "keyup", "keypress", "text", "hotkey"):
                     msg["monitor"] = state["monitor_id"]
                     await asyncio.to_thread(input_controller.handle_packet, msg)
-                    ack_event.set()
 
                 elif mtype in ("webrtc_offer", "webrtc_answer", "webrtc_ice", "webrtc_ready"):
                     await session_manager.relay_webrtc_signal(session_id, msg)
