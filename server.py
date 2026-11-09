@@ -376,10 +376,15 @@ async def ws_remote_endpoint(websocket: WebSocket):
     user_agent = websocket.headers.get("user-agent", "RemoteMe Viewer")
 
     is_mobile = any(k in user_agent for k in ("Mobile", "iPhone", "Android", "iPad"))
+    is_local_host = (
+        not websocket.headers.get("cf-connecting-ip")
+        and not websocket.headers.get("x-forwarded-for")
+        and client_ip in ("127.0.0.1", "::1", "localhost")
+    )
 
-    # Stream state per viewer connection
+    # Stream state per viewer connection (local host console is pre-authenticated so it doesn't block reading the PIN)
     state = {
-        "authenticated": not config.require_pin,
+        "authenticated": True if is_local_host else (not config.require_pin),
         "streaming": True,
         "monitor_id": 1,
         "fps": 60,

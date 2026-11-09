@@ -112,20 +112,48 @@ const RemoteViewer = {
 
     handleJsonMessage(msg) {
         if (msg.type === 'hello') {
+            this.currentDeviceId = msg.device_id || 'default';
             if (Array.isArray(msg.monitors)) {
                 this.updateMonitorList(msg.monitors);
             }
             if (msg.require_pin && !msg.authenticated) {
-                const pin = prompt(`เครื่อง "${msg.device_name}" ล็อกรหัสความปลอดภัย กรุณากรอกรหัส PIN 6 หลัก:`);
+                // 1) If running on local host PC where pin_code is visible on Dashboard, auto-authenticate without blocking UI
+                const localPin = (App.systemInfo?.pin_code && App.systemInfo.pin_code !== '******') ? App.systemInfo.pin_code : null;
+                if (localPin) {
+                    this.lastAttemptedPin = localPin;
+                    this.sendJson({ type: 'auth', pin: localPin });
+                    return;
+                }
+                // 2) Check saved PIN on this mobile/remote device
+                const savedPin = localStorage.getItem(`remoteme_saved_pin_${this.currentDeviceId}`);
+                if (savedPin) {
+                    this.lastAttemptedPin = savedPin;
+                    this.sendJson({ type: 'auth', pin: savedPin });
+                    return;
+                }
+                // 3) Prompt user with clear instructions on where to see the PIN
+                const pin = prompt(`เครื่อง "${msg.device_name}" ล็อกรหัสความปลอดภัย\nกรุณากรอกรหัส PIN 6 หลัก (ดูรหัสได้ที่หน้าแรกในกล่อง "รหัสผ่านความปลอดภัย" บนเครื่องคอมพิวเตอร์):`);
                 if (pin !== null) {
-                    this.sendJson({ type: 'auth', pin: pin.trim() });
+                    this.lastAttemptedPin = pin.trim();
+                    this.sendJson({ type: 'auth', pin: this.lastAttemptedPin });
                 }
             }
         } else if (msg.type === 'auth_result') {
             if (msg.authenticated) {
+                if (this.lastAttemptedPin && this.currentDeviceId) {
+                    localStorage.setItem(`remoteme_saved_pin_${this.currentDeviceId}`, this.lastAttemptedPin);
+                }
                 App.toast('ยืนยันรหัส PIN สำเร็จ เริ่มสตรีมหน้าจอแล้ว', 'success');
             } else {
+                if (this.currentDeviceId) {
+                    localStorage.removeItem(`remoteme_saved_pin_${this.currentDeviceId}`);
+                }
                 App.toast(msg.error || 'รหัส PIN ไม่ถูกต้อง', 'error');
+                const retryPin = prompt('รหัส PIN ไม่ถูกต้อง กรุณากรอกรหัส PIN 6 หลักอีกครั้ง:');
+                if (retryPin !== null) {
+                    this.lastAttemptedPin = retryPin.trim();
+                    this.sendJson({ type: 'auth', pin: this.lastAttemptedPin });
+                }
             }
         } else if (msg.type === 'pong') {
             const rtt = Math.max(1, Date.now() - (msg.client_ts || Date.now()));
