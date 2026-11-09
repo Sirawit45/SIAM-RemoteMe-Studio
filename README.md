@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="static/assets/logo.png" width="140" alt="SIAM RemoteMe Studio Logo" />
+
 # 🚀 SIAM RemoteMe Studio (PRO 60FPS)
 
 **โปรแกรมรีโมทคอมพิวเตอร์ความหน่วงต่ำ (Zero-Lag 60FPS) และระบบโอนย้ายไฟล์ความเร็วสูงข้ามแพลตฟอร์ม**  
