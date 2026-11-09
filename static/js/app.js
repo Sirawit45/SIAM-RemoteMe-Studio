@@ -493,18 +493,9 @@ const App = {
         const formattedId = (data.device_id || '').replace(/-/g, ' ');
         this.setText('sidebar-device-id', formattedId);
         this.setText('card-device-id', formattedId);
-        this.setText('header-device-name', `${data.device_name} (${data.os_name})`);
-        this.setText('card-os-info', `${data.os_name} (${data.os_arch}) • ${data.cpu_cores} Cores`);
+        this.setText('header-device-name', `${data.device_name}`);
+        this.setText('card-os-info', 'พร้อมรับการเชื่อมต่อด้วยรหัส 9 หลัก');
         this.setText('card-pin-code', data.pin_code || '------');
-
-        this.setText('sidebar-sys-load', `${data.cpu_percent}% / ${data.ram_percent}%`);
-        this.setText('meter-cpu-text', `${data.cpu_percent}%`);
-        this.setText('meter-ram-text', `${data.ram_used_gb} / ${data.ram_total_gb} GB (${data.ram_percent}%)`);
-
-        const cpuBar = document.getElementById('meter-cpu-bar');
-        if (cpuBar) cpuBar.style.width = `${Math.max(4, data.cpu_percent)}%`;
-        const ramBar = document.getElementById('meter-ram-bar');
-        if (ramBar) ramBar.style.width = `${Math.max(4, data.ram_percent)}%`;
 
         const activeCount = Math.max(1, (data.sessions || []).length);
         this.setText('dash-active-sessions', String(activeCount).padStart(2, '0'));
@@ -515,34 +506,15 @@ const App = {
         }
 
         const wan = data.wan || {};
-        const wanUrlEl = document.getElementById('wan-public-url');
         const wanDotEl = document.getElementById('wan-status-dot');
-        if (wanUrlEl && wanDotEl) {
+        if (wanDotEl) {
             if (wan.status === 'online' && wan.public_url) {
-                wanUrlEl.textContent = wan.public_url;
                 wanDotEl.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
             } else if (wan.status === 'starting' || wan.status === 'downloading') {
-                wanUrlEl.textContent = 'กำลังเชื่อมต่ออุโมงค์คลาวด์ระดับโลก (ใช้เวลาประมาณ 3-6 วินาที)...';
                 wanDotEl.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
             } else {
-                wanUrlEl.textContent = wan.error_msg || 'คลิกปุ่ม "เปิด/รีเฟรช" เพื่อเปิดใช้งานลิงก์ควบคุมข้ามอินเทอร์เน็ต';
                 wanDotEl.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
             }
-        }
-
-        const urlList = document.getElementById('network-url-list');
-        if (urlList && Array.isArray(data.addresses)) {
-            urlList.innerHTML = data.addresses.map(addr => `
-                <div onclick="App.copyText('${addr.url}')" class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-rose-50/60 dark:hover:bg-slate-800 border border-slate-200/70 dark:border-slate-700 cursor-pointer transition group">
-                    <div class="flex items-center gap-2.5">
-                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold ${addr.url.startsWith('https://') ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'}">${addr.type}</span>
-                        <span class="font-mono-num text-xs font-semibold text-slate-700 dark:text-slate-200">${addr.url}</span>
-                    </div>
-                    <span class="text-[11px] text-rose-600 opacity-80 group-hover:opacity-100 flex items-center gap-1 font-medium">
-                        คัดลอกลิงก์
-                    </span>
-                </div>
-            `).join('');
         }
 
         const setDevName = document.getElementById('set-device-name');
@@ -688,14 +660,14 @@ const App = {
     },
 
     openQrModal() {
-        const url = this.systemInfo?.wan?.public_url || (this.systemInfo?.addresses?.[0]?.url) || window.location.origin;
+        const devId = this.systemInfo?.device_id || '';
+        const portalUrl = `https://sirawit45.github.io/SIAM-RemoteMe-Studio/?id=${encodeURIComponent(devId)}`;
         const qrImg = document.getElementById('qr-code-img');
         if (qrImg) {
-            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`;
+            qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(portalUrl)}`;
         }
-        this.setText('qr-device-id', (this.systemInfo?.device_id || '').replace(/-/g, ' '));
+        this.setText('qr-device-id', devId.replace(/-/g, ' '));
         this.setText('qr-pin-code', this.systemInfo?.pin_code || '------');
-        this.setText('qr-url-text', url);
 
         const modal = document.getElementById('qr-modal');
         modal?.classList.remove('hidden');
