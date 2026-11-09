@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
+
+:root {
+    --sidebar-bg: #1e152a;
+    --sidebar-hover: #2d203e;
+    --sidebar-active: #e11d48;
+    --accent-primary: #e11d48;
+    --accent-hover: #be123c;
+    --bg-main: #f4f6fb;
+    --card-bg: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+}
+
+body.dark-theme {
+    --bg-main: #0f111a;
+    --card-bg: #181b28;
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --border-color: #262b3d;
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100dvh;
+    width: 100vw;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.font-mono-num {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Hide scrollbar for horizontal mobile toolbars */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(225, 29, 72, 0.6);
+}
+
+/* Sidebar Navigation */
+.sidebar-gradient {
+    background: linear-gradient(180deg, #21162c 0%, #150e1d 100%);
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 1rem;
+    border-radius: 0.75rem;
+    color: #cbd5e1;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.18s ease;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.nav-item:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+}
+
+.nav-item.active {
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+    color: #ffffff;
+    box-shadow: 0 6px 18px -4px rgba(225, 29, 72, 0.55);
+}
+
+/* Mobile Bottom Nav Item */
+.mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    padding: 6px 4px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.mobile-nav-btn.active {
+    color: #e11d48;
+    font-weight: 700;
+}
+
+/* Cards & Surfaces */
+.app-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+    transition: all 0.2s ease;
+}
+
+.stat-card-glow {
+    position: relative;
+    overflow: hidden;
+}
+.stat-card-glow::after {
+    content: '';
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 140px;
+    height: 140px;
+    background: radial-gradient(circle, rgba(225, 29, 72, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+/* Remote Viewer Stage */
+#remote-stage-container {
+    background: radial-gradient(circle at center, #1a1d2d 0%, #090b10 100%);
+    position: relative;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+}
+
+#remote-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+    cursor: crosshair;
+    outline: none;
+    transform-origin: center center;
+    transition: transform 0.12s ease-out;
+}
+
+/* Progress Bar Striping Animation */
+@keyframes progress-pulse {
+    0% { background-position: 0 0; }
+    100% { background-position: 30px 0; }
+}
+
+.progress-animated {
+    background-image: linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.18) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.18) 50%,
+        rgba(255, 255, 255, 0.18) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 30px 30px;
+    animation: progress-pulse 1s linear infinite;
+}
+
+/* Drag & Drop Overlay */
+.drop-zone-active {
+    border: 2px dashed #e11d48 !important;
+    background-color: rgba(225, 29, 72, 0.06) !important;
+}
+
+/* File table row hover */
+.file-row {
+    transition: background-color 0.12s ease;
+}
+.file-row:hover {
+    background-color: rgba(225, 29, 72, 0.04);
+}
+.file-row.selected {
+    background-color: rgba(225, 29, 72, 0.1);
+}
