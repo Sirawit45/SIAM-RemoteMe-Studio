@@ -496,10 +496,23 @@ namespace SiamRemoteMeSetup
                 }
 
                 // Kill existing instance if running from targetDir
-                foreach (var proc in Process.GetProcessesByName("SIAM_RemoteMe_Studio"))
+                foreach (string procName in new[] { "SIAM_RemoteMe_Studio", "SIAM_RemoteMe_Portable" })
                 {
-                    try { proc.Kill(); proc.WaitForExit(2000); } catch { }
+                    foreach (var proc in Process.GetProcessesByName(procName))
+                    {
+                        try { proc.Kill(); proc.WaitForExit(2000); } catch { }
+                    }
                 }
+
+                // Clean up any old renamed files from previous updates
+                try
+                {
+                    foreach (string oldFile in Directory.GetFiles(targetDir, "*.old_*", SearchOption.AllDirectories))
+                    {
+                        try { File.Delete(oldFile); } catch { }
+                    }
+                }
+                catch { }
 
                 UpdateProgress(25, "กำลังแตกไฟล์โปรแกรม SIAM RemoteMe Studio...");
                 string tempZip = Path.Combine(Path.GetTempPath(), "siam_remoteme_payload_" + Guid.NewGuid().ToString("N") + ".zip");
@@ -529,7 +542,29 @@ namespace SiamRemoteMeSetup
                         }
                         if (!string.IsNullOrEmpty(entry.Name))
                         {
-                            entry.ExtractToFile(fullPath, true);
+                            try
+                            {
+                                entry.ExtractToFile(fullPath, true);
+                            }
+                            catch (IOException)
+                            {
+                                // If file is locked by a running background process (e.g. cloudflared.exe),
+                                // rename the running file out of the way or keep existing if already present.
+                                try
+                                {
+                                    string movedPath = fullPath + ".old_" + Guid.NewGuid().ToString("N").Substring(0, 6);
+                                    if (File.Exists(fullPath))
+                                    {
+                                        File.Move(fullPath, movedPath);
+                                    }
+                                    entry.ExtractToFile(fullPath, true);
+                                }
+                                catch
+                                {
+                                    if (!File.Exists(fullPath))
+                                        throw;
+                                }
+                            }
                         }
                         int pct = 55 + (int)((idx / (double)Math.Max(1, total)) * 25);
                         UpdateProgress(pct, "กำลังติดตั้ง: " + entry.Name);
