@@ -150,8 +150,16 @@ if IS_WINDOWS:
     _user32.GetAsyncKeyState.restype = ctypes.c_short
     _user32.GetForegroundWindow.argtypes = []
     _user32.GetForegroundWindow.restype = wintypes.HWND
+    _user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+    _user32.SetForegroundWindow.restype = wintypes.BOOL
+    _user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+    _user32.FindWindowW.restype = wintypes.HWND
+    _user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    _user32.IsWindowVisible.restype = wintypes.BOOL
     _user32.WindowFromPoint.argtypes = [wintypes.POINT]
     _user32.WindowFromPoint.restype = wintypes.HWND
+    _user32.GetAncestor.argtypes = [wintypes.HWND, ctypes.c_uint]
+    _user32.GetAncestor.restype = wintypes.HWND
     _user32.GetSystemMetrics.argtypes = [ctypes.c_int]
     _user32.GetSystemMetrics.restype = ctypes.c_int
 else:
@@ -268,6 +276,25 @@ class InputController:
         if "middle" not in self.active_mouse_buttons and (_user32.GetAsyncKeyState(0x04) & 0x8000):
             self._win_send_mouse(MOUSEEVENTF_MIDDLEUP)
 
+    def _recover_fg_from_hidden_overlay(self, abs_x: int, abs_y: int):
+        """Recover foreground focus if a hidden driver/vendor overlay (e.g. ASUS ASHDRCONTROL) hijacked it."""
+        if not IS_WINDOWS:
+            return
+        fg_hwnd = _user32.GetForegroundWindow()
+        if not fg_hwnd:
+            return
+        fg_cls = self._get_win_class(fg_hwnd)
+        if fg_cls in ("ASHDRCONTROL", "ASHOTPLUGCTRL", "AsMonitorControl") or not _user32.IsWindowVisible(fg_hwnd):
+            pt_hwnd = _user32.WindowFromPoint(wintypes.POINT(abs_x, abs_y))
+            if pt_hwnd:
+                root_hwnd = _user32.GetAncestor(pt_hwnd, 2)  # GA_ROOT = 2
+                if root_hwnd and root_hwnd != fg_hwnd:
+                    _user32.SetForegroundWindow(root_hwnd)
+                    return
+            progman = _user32.FindWindowW("Progman", None)
+            if progman:
+                _user32.SetForegroundWindow(progman)
+
     def _log_event(self, event_name: str, norm_x: Optional[float], norm_y: Optional[float], abs_x: int, abs_y: int, sent: int = 1, err: int = 0, extra: str = ""):
         fg_hwnd = _user32.GetForegroundWindow() if IS_WINDOWS else 0
         pt_hwnd = _user32.WindowFromPoint(wintypes.POINT(abs_x, abs_y)) if IS_WINDOWS else 0
@@ -332,6 +359,7 @@ class InputController:
 
             if action in ("click", "dblclick", "down"):
                 self._heal_stuck_buttons()
+                self._recover_fg_from_hidden_overlay(abs_x, abs_y)
                 if moved:
                     # Short settle yield after pointer move so freshly exposed/closed Shell controls register pointer position
                     await asyncio.sleep(0.004)
