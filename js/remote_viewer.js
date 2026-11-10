@@ -458,22 +458,6 @@ const RemoteViewer = {
         c.setAttribute('draggable', 'false');
         c.addEventListener('dragstart', (e) => e.preventDefault());
 
-        c.addEventListener('pointerdown', (e) => {
-            if (e.pointerType === 'touch') return;
-            try { c.setPointerCapture(e.pointerId); } catch (_) {}
-        });
-
-        c.addEventListener('pointerup', (e) => {
-            if (e.pointerType === 'touch') return;
-            try { c.releasePointerCapture(e.pointerId); } catch (_) {}
-        });
-
-        c.addEventListener('pointercancel', (e) => {
-            if (e.pointerType === 'touch') return;
-            try { c.releasePointerCapture(e.pointerId); } catch (_) {}
-            this.releaseAllPressedButtons();
-        });
-
         c.addEventListener('mousemove', (e) => {
             this.isTouchActive = false;
             if (!this.inputEnabled) return;
@@ -531,7 +515,9 @@ const RemoteViewer = {
         c.addEventListener('dblclick', (e) => {
             if (!this.inputEnabled) return;
             e.preventDefault();
-            // In Windows, rapid mousedown/mouseup pairs trigger native double-click.
+            const btn = btnMap[e.button] || 'left';
+            const { x, y } = this.getNormalizedCoords(e);
+            this.sendJson({ type: 'dblclick', button: btn, x, y });
         });
 
         c.addEventListener('contextmenu', (e) => e.preventDefault());
