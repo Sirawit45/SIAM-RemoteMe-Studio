@@ -178,7 +178,7 @@ class InputController:
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                await asyncio.sleep(0.025)
+                await asyncio.sleep(0.035)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
@@ -187,15 +187,15 @@ class InputController:
             elif action == "dblclick":
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
-                # First click (down -> 25ms -> up)
+                # First click (down -> 30ms -> up)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                await asyncio.sleep(0.025)
+                await asyncio.sleep(0.030)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
-                # Inter-click delay
-                await asyncio.sleep(0.035)
-                # Second click (down -> 25ms -> up)
+                # Inter-click delay (human natural double-click timing: 80ms)
+                await asyncio.sleep(0.080)
+                # Second click (down -> 30ms -> up)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                await asyncio.sleep(0.025)
+                await asyncio.sleep(0.030)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
@@ -212,12 +212,20 @@ class InputController:
                 self.down_coords.pop(btn, None)
                 self.is_dragging = False
             elif action == "click":
-                _mouse.click(p_btn, 1)
+                _mouse.press(p_btn)
+                await asyncio.sleep(0.035)
+                _mouse.release(p_btn)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
                 self.is_dragging = False
             elif action == "dblclick":
-                _mouse.click(p_btn, 2)
+                _mouse.press(p_btn)
+                await asyncio.sleep(0.030)
+                _mouse.release(p_btn)
+                await asyncio.sleep(0.080)
+                _mouse.press(p_btn)
+                await asyncio.sleep(0.030)
+                _mouse.release(p_btn)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
                 self.is_dragging = False

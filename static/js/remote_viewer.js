@@ -458,6 +458,16 @@ const RemoteViewer = {
         c.setAttribute('draggable', 'false');
         c.addEventListener('dragstart', (e) => e.preventDefault());
 
+        const btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
+        let isMouseDown = false;
+        let isDragging = false;
+        let downBtn = 'left';
+        let downClientX = 0;
+        let downClientY = 0;
+        let downNorm = { x: 0, y: 0 };
+        let downTime = 0;
+        const dragThresholdPx = 6;
+
         c.addEventListener('mousemove', (e) => {
             this.isTouchActive = false;
             if (!this.inputEnabled) return;
@@ -466,55 +476,85 @@ const RemoteViewer = {
             this.virtualCursorY = y;
             this.lastLocalInputTime = performance.now();
 
-            const now = performance.now();
-            if (now - this.lastMouseMoveTime < 12) return;
-            this.lastMouseMoveTime = now;
-            this.sendJson({ type: 'mousemove', x, y });
-        });
-
-        const btnMap = { 0: 'left', 1: 'middle', 2: 'right' };
-
-        c.addEventListener('mousedown', (e) => {
-            c.focus();
-            if (!this.inputEnabled) return;
-            e.preventDefault();
-            const btn = btnMap[e.button] || 'left';
-            this.pressedButtons.add(btn);
-            const { x, y } = this.getNormalizedCoords(e);
-            this.sendJson({ type: 'mousedown', button: btn, x, y });
-        });
-
-        c.addEventListener('mouseup', (e) => {
-            if (!this.inputEnabled) return;
-            e.preventDefault();
-            const btn = btnMap[e.button] || 'left';
-            this.pressedButtons.delete(btn);
-            const { x, y } = this.getNormalizedCoords(e);
-            this.sendJson({ type: 'mouseup', button: btn, x, y });
-        });
-
-        window.addEventListener('mouseup', (e) => {
-            if (!this.inputEnabled) return;
-            const btn = btnMap[e.button] || 'left';
-            if (this.pressedButtons.has(btn)) {
-                this.pressedButtons.delete(btn);
-                this.sendJson({ type: 'mouseup', button: btn, x: this.virtualCursorX, y: this.virtualCursorY });
+            if (isMouseDown) {
+                const dist = Math.hypot(e.clientX - downClientX, e.clientY - downClientY);
+                if (!isDragging && dist >= dragThresholdPx) {
+                    isDragging = true;
+                    this.pressedButtons.add(downBtn);
+                    this.sendJson({ type: 'mousedown', button: downBtn, x: downNorm.x, y: downNorm.y });
+                }
+                if (isDragging) {
+                    const now = performance.now();
+                    if (now - this.lastMouseMoveTime < 12) return;
+                    this.lastMouseMoveTime = now;
+                    this.sendJson({ type: 'mousemove', x, y });
+                }
+            } else {
+                const now = performance.now();
+                if (now - this.lastMouseMoveTime < 12) return;
+                this.lastMouseMoveTime = now;
+                this.sendJson({ type: 'mousemove', x, y });
             }
         });
 
+        c.addEventListener('mousedown', (e) => {
+            try { c.focus({ preventScroll: true }); } catch (_) {}
+            if (!this.inputEnabled) return;
+            e.preventDefault();
+            const btn = btnMap[e.button] || 'left';
+            isMouseDown = true;
+            isDragging = false;
+            downBtn = btn;
+            downClientX = e.clientX;
+            downClientY = e.clientY;
+            downNorm = this.getNormalizedCoords(e);
+            downTime = performance.now();
+        });
+
+        const handleMouseUp = (e) => {
+            if (!this.inputEnabled || !isMouseDown) return;
+            isMouseDown = false;
+            e.preventDefault();
+            const btn = btnMap[e.button] || downBtn || 'left';
+            const { x, y } = this.getNormalizedCoords(e);
+
+            if (isDragging) {
+                this.pressedButtons.delete(btn);
+                this.sendJson({ type: 'mouseup', button: btn, x, y });
+                isDragging = false;
+            } else {
+                // Quick click / tap: Dispatch atomic, reliable click directly at clicked coordinate
+                this.sendJson({ type: 'click', button: btn, x: downNorm.x, y: downNorm.y });
+            }
+        };
+
+        c.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('mouseup', (e) => {
+            if (isMouseDown) {
+                handleMouseUp(e);
+            }
+        });
+
+        c.addEventListener('dblclick', (e) => {
+            if (!this.inputEnabled) return;
+            e.preventDefault();
+            const btn = btnMap[e.button] || 'left';
+            const { x, y } = this.getNormalizedCoords(e);
+            this.sendJson({ type: 'dblclick', button: btn, x, y });
+        });
+
         window.addEventListener('blur', () => {
+            isMouseDown = false;
+            isDragging = false;
             this.releaseAllPressedButtons();
         });
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                isMouseDown = false;
+                isDragging = false;
                 this.releaseAllPressedButtons();
             }
-        });
-
-        c.addEventListener('dblclick', (e) => {
-            e.preventDefault();
-            // Native rapid mousedown/mouseup pairs dispatched above trigger native Windows OS double-click cleanly.
         });
 
         c.addEventListener('contextmenu', (e) => e.preventDefault());
