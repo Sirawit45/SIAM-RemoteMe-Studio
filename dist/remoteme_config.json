@@ -1,0 +1,13 @@
+{
+  "device_id": "322-343-024",
+  "device_name": "DESKTOP-I5EA94V",
+  "pin_code": "835119",
+  "require_pin": true,
+  "port": 8765,
+  "default_fps": 60,
+  "default_quality": 75,
+  "default_scale": 1.0,
+  "allow_file_delete": true,
+  "allow_input_control": true,
+  "default_upload_dir": "C:\\Users\\Jo_save\\Downloads"
+}
