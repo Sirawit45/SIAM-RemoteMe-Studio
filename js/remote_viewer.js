@@ -465,7 +465,7 @@ const RemoteViewer = {
         let downClientX = 0;
         let downClientY = 0;
         let downNorm = { x: 0, y: 0 };
-        let downTime = 0;
+        let lastDblClickSent = 0;
         const dragThresholdPx = 6;
 
         c.addEventListener('mousemove', (e) => {
@@ -475,6 +475,16 @@ const RemoteViewer = {
             this.virtualCursorX = x;
             this.virtualCursorY = y;
             this.lastLocalInputTime = performance.now();
+
+            // Auto-heal if mouse button was physically released outside viewport
+            if (isMouseDown && e.buttons === 0) {
+                isMouseDown = false;
+                if (isDragging) {
+                    isDragging = false;
+                    this.pressedButtons.delete(downBtn);
+                    this.sendJson({ type: 'mouseup', button: downBtn, x, y });
+                }
+            }
 
             if (isMouseDown) {
                 const dist = Math.hypot(e.clientX - downClientX, e.clientY - downClientY);
@@ -508,7 +518,6 @@ const RemoteViewer = {
             downClientX = e.clientX;
             downClientY = e.clientY;
             downNorm = this.getNormalizedCoords(e);
-            downTime = performance.now();
         });
 
         const handleMouseUp = (e) => {
@@ -522,6 +531,9 @@ const RemoteViewer = {
                 this.pressedButtons.delete(btn);
                 this.sendJson({ type: 'mouseup', button: btn, x, y });
                 isDragging = false;
+            } else if (btn === 'left' && e.detail >= 2) {
+                lastDblClickSent = performance.now();
+                this.sendJson({ type: 'dblclick', button: btn, x: downNorm.x, y: downNorm.y });
             } else {
                 // Quick click / tap: Dispatch atomic, reliable click directly at clicked coordinate
                 this.sendJson({ type: 'click', button: btn, x: downNorm.x, y: downNorm.y });
@@ -538,6 +550,8 @@ const RemoteViewer = {
         c.addEventListener('dblclick', (e) => {
             if (!this.inputEnabled) return;
             e.preventDefault();
+            // Fallback only if browser mouseup did not already emit dblclick on detail >= 2
+            if (performance.now() - lastDblClickSent < 300) return;
             const btn = btnMap[e.button] || 'left';
             const { x, y } = this.getNormalizedCoords(e);
             this.sendJson({ type: 'dblclick', button: btn, x, y });
