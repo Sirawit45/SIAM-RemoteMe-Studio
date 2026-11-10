@@ -154,6 +154,18 @@ async def api_system_info(request: Request):
     return telemetry
 
 
+@app.get("/api/debug/input_log")
+async def api_debug_input_log(request: Request):
+    if not _is_local_host_request(request):
+        raise HTTPException(status_code=403, detail="Localhost only")
+    return {
+        "active_mouse_buttons": list(input_controller.active_mouse_buttons),
+        "is_dragging": input_controller.is_dragging,
+        "last_abs_pos": input_controller.last_abs_pos,
+        "events": list(input_controller.debug_log),
+    }
+
+
 class WanStartRequest(BaseModel):
     provider: Optional[str] = "cloudflare"
 

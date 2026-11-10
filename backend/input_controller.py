@@ -1,8 +1,10 @@
 import asyncio
 import ctypes
+import ctypes.wintypes as wintypes
 import platform
 import time
-from typing import Dict, Any
+from collections import deque
+from typing import Dict, Any, Optional
 
 from backend.screen_engine import screen_engine
 from backend.config import config
@@ -72,7 +74,10 @@ VK_MAP = {
     "Quote": 0xDE, "'": 0xDE,
 }
 
-# Mouse Event Flags on Windows
+# Mouse / Keyboard Event Flags on Windows
+INPUT_MOUSE = 0
+INPUT_KEYBOARD = 1
+
 MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
@@ -81,13 +86,82 @@ MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
 MOUSEEVENTF_WHEEL = 0x0800
-MOUSEEVENTF_HWHEEL = 0x01000
+MOUSEEVENTF_HWHEEL = 0x1000
+MOUSEEVENTF_VIRTUALDESK = 0x4000
+MOUSEEVENTF_ABSOLUTE = 0x8000
+
 KEYEVENTF_KEYUP = 0x0002
+
+
+if IS_WINDOWS:
+    _ULONG_PTR = ctypes.c_uint64 if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_uint32
+
+    class MOUSEINPUT(ctypes.Structure):
+        _fields_ = [
+            ("dx", ctypes.c_long),
+            ("dy", ctypes.c_long),
+            ("mouseData", ctypes.c_ulong),
+            ("dwFlags", ctypes.c_ulong),
+            ("time", ctypes.c_ulong),
+            ("dwExtraInfo", _ULONG_PTR),
+        ]
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [
+            ("wVk", ctypes.c_ushort),
+            ("wScan", ctypes.c_ushort),
+            ("dwFlags", ctypes.c_ulong),
+            ("time", ctypes.c_ulong),
+            ("dwExtraInfo", _ULONG_PTR),
+        ]
+
+    class HARDWAREINPUT(ctypes.Structure):
+        _fields_ = [
+            ("uMsg", ctypes.c_ulong),
+            ("wParamL", ctypes.c_short),
+            ("wParamH", ctypes.c_ushort),
+        ]
+
+    class _INPUT_UNION(ctypes.Union):
+        _fields_ = [
+            ("mi", MOUSEINPUT),
+            ("ki", KEYBDINPUT),
+            ("hi", HARDWAREINPUT),
+        ]
+
+    class INPUT(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.c_ulong),
+            ("u", _INPUT_UNION),
+        ]
+
+    _user32 = ctypes.WinDLL("user32", use_last_error=True)
+    _user32.SendInput.argtypes = [ctypes.c_uint, ctypes.POINTER(INPUT), ctypes.c_int]
+    _user32.SendInput.restype = ctypes.c_uint
+    _user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+    _user32.SetCursorPos.restype = wintypes.BOOL
+    _user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
+    _user32.GetCursorPos.restype = wintypes.BOOL
+    _user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, _ULONG_PTR]
+    _user32.mouse_event.restype = None
+    _user32.keybd_event.argtypes = [wintypes.BYTE, wintypes.BYTE, wintypes.DWORD, _ULONG_PTR]
+    _user32.keybd_event.restype = None
+    _user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+    _user32.GetAsyncKeyState.restype = ctypes.c_short
+    _user32.GetForegroundWindow.argtypes = []
+    _user32.GetForegroundWindow.restype = wintypes.HWND
+    _user32.WindowFromPoint.argtypes = [wintypes.POINT]
+    _user32.WindowFromPoint.restype = wintypes.HWND
+    _user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+    _user32.GetSystemMetrics.restype = ctypes.c_int
+else:
+    _user32 = None
 
 
 class InputController:
     """
-    Ultra-low-latency cross-platform Mouse & Keyboard Input Controller.
+    Ultra-low-latency cross-platform Mouse & Keyboard Input Controller
+    using Win32 SendInput (hardware pointer injection) on Windows.
     """
 
     def __init__(self):
@@ -96,6 +170,8 @@ class InputController:
         self.last_down_times = {}
         self.down_coords = {}
         self.is_dragging = False
+        self.last_abs_pos = (0, 0)
+        self.debug_log = deque(maxlen=120)
 
     def _resolve_coords(self, norm_x: float, norm_y: float, monitor_id: int = 1) -> tuple[int, int]:
         bounds = screen_engine.get_monitor_bounds(monitor_id)
@@ -105,12 +181,117 @@ class InputController:
         abs_y = int(bounds["top"] + norm_y * max(1, bounds["height"] - 1))
         return abs_x, abs_y
 
+    def _to_virtual_abs(self, x: int, y: int) -> tuple[int, int]:
+        v_left = _user32.GetSystemMetrics(76)  # SM_XVIRTUALSCREEN
+        v_top = _user32.GetSystemMetrics(77)   # SM_YVIRTUALSCREEN
+        v_w = _user32.GetSystemMetrics(78)     # SM_CXVIRTUALSCREEN
+        v_h = _user32.GetSystemMetrics(79)     # SM_CYVIRTUALSCREEN
+        if v_w <= 1:
+            v_w = 1920
+        if v_h <= 1:
+            v_h = 1080
+        dx = max(0, min(65535, int(round((x - v_left) * 65535.0 / max(1, v_w - 1)))))
+        dy = max(0, min(65535, int(round((y - v_top) * 65535.0 / max(1, v_h - 1)))))
+        return dx, dy
+
+    def _win_send_mouse(
+        self,
+        flags: int,
+        abs_x: Optional[int] = None,
+        abs_y: Optional[int] = None,
+        mouse_data: int = 0,
+    ) -> tuple[int, int]:
+        """Inject a genuine Win32 hardware mouse packet via SendInput (fallback to mouse_event)."""
+        dx = 0
+        dy = 0
+        final_flags = flags
+        if abs_x is not None and abs_y is not None:
+            dx, dy = self._to_virtual_abs(abs_x, abs_y)
+            final_flags |= MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK
+
+        inp = INPUT()
+        inp.type = INPUT_MOUSE
+        inp.u.mi = MOUSEINPUT(
+            dx=dx,
+            dy=dy,
+            mouseData=ctypes.c_ulong(mouse_data & 0xFFFFFFFF),
+            dwFlags=final_flags,
+            time=0,
+            dwExtraInfo=0,
+        )
+        ctypes.set_last_error(0)
+        sent = _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+        err = ctypes.get_last_error()
+        if sent == 0:
+            # Fallback to legacy SetCursorPos + mouse_event if SendInput was rejected
+            if abs_x is not None and abs_y is not None and (flags & MOUSEEVENTF_MOVE):
+                _user32.SetCursorPos(abs_x, abs_y)
+            if flags & ~MOUSEEVENTF_MOVE:
+                _user32.mouse_event(flags & ~MOUSEEVENTF_MOVE, 0, 0, mouse_data & 0xFFFFFFFF, 0)
+        return int(sent), int(err)
+
+    def _win_send_key(self, vk: int, key_up: bool = False) -> tuple[int, int]:
+        inp = INPUT()
+        inp.type = INPUT_KEYBOARD
+        inp.u.ki = KEYBDINPUT(
+            wVk=vk & 0xFFFF,
+            wScan=0,
+            dwFlags=KEYEVENTF_KEYUP if key_up else 0,
+            time=0,
+            dwExtraInfo=0,
+        )
+        ctypes.set_last_error(0)
+        sent = _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+        err = ctypes.get_last_error()
+        if sent == 0:
+            _user32.keybd_event(vk & 0xFF, 0, KEYEVENTF_KEYUP if key_up else 0, 0)
+        return int(sent), int(err)
+
+    def _get_win_class(self, hwnd) -> str:
+        if not hwnd:
+            return ""
+        try:
+            buf = ctypes.create_unicode_buffer(128)
+            _user32.GetClassNameW(hwnd, buf, 128)
+            return buf.value
+        except Exception:
+            return ""
+
+    def _heal_stuck_buttons(self):
+        """Ensure Windows OS does not think a mouse button is stuck down when client is idle."""
+        if not IS_WINDOWS:
+            return
+        if "left" not in self.active_mouse_buttons and (_user32.GetAsyncKeyState(0x01) & 0x8000):
+            self._win_send_mouse(MOUSEEVENTF_LEFTUP)
+        if "right" not in self.active_mouse_buttons and (_user32.GetAsyncKeyState(0x02) & 0x8000):
+            self._win_send_mouse(MOUSEEVENTF_RIGHTUP)
+        if "middle" not in self.active_mouse_buttons and (_user32.GetAsyncKeyState(0x04) & 0x8000):
+            self._win_send_mouse(MOUSEEVENTF_MIDDLEUP)
+
+    def _log_event(self, event_name: str, norm_x: Optional[float], norm_y: Optional[float], abs_x: int, abs_y: int, sent: int = 1, err: int = 0, extra: str = ""):
+        fg_hwnd = _user32.GetForegroundWindow() if IS_WINDOWS else 0
+        pt_hwnd = _user32.WindowFromPoint(wintypes.POINT(abs_x, abs_y)) if IS_WINDOWS else 0
+        lbtn = bool(_user32.GetAsyncKeyState(0x01) & 0x8000) if IS_WINDOWS else False
+        self.debug_log.append({
+            "ts": round(time.time(), 3),
+            "event": event_name,
+            "norm": [norm_x, norm_y],
+            "px": [abs_x, abs_y],
+            "sent": sent,
+            "err": err,
+            "fg": f"{fg_hwnd}:{self._get_win_class(fg_hwnd)}",
+            "pt": f"{pt_hwnd}:{self._get_win_class(pt_hwnd)}",
+            "os_lbtn": lbtn,
+            "active_btns": list(self.active_mouse_buttons),
+            "extra": extra,
+        })
+
     def move_mouse(self, norm_x: float, norm_y: float, monitor_id: int = 1):
         if not config.allow_input_control:
             return
 
         # Trackpad Jitter Filter: When mouse button is held down (tap/click),
-        # suppress micro-movements (< 12 pixels) so Windows never confuses clicks with drag-and-drop!
+        # suppress micro-movements (< 12 pixels) so Windows never confuses clicks with drag-and-drop.
         if self.active_mouse_buttons:
             down_pos = self.down_coords.get("left")
             if down_pos and not self.is_dragging:
@@ -121,8 +302,10 @@ class InputController:
                 self.is_dragging = True
 
         x, y = self._resolve_coords(norm_x, norm_y, monitor_id)
+        self.last_abs_pos = (x, y)
         if IS_WINDOWS:
-            ctypes.windll.user32.SetCursorPos(x, y)
+            # Send hardware pointer move so DWM, Shell Desktop, and XAML update hover/hit-test
+            self._win_send_mouse(MOUSEEVENTF_MOVE, x, y)
         elif HAS_PYNPUT:
             _mouse.position = (x, y)
 
@@ -132,11 +315,14 @@ class InputController:
             return
 
         btn = (button or "left").lower()
+        moved = False
         if norm_x is not None and norm_y is not None:
             self.move_mouse(norm_x, norm_y, monitor_id)
+            moved = True
+
+        abs_x, abs_y = self._resolve_coords(norm_x, norm_y, monitor_id) if (norm_x is not None and norm_y is not None) else self.last_abs_pos
 
         if IS_WINDOWS:
-            user32 = ctypes.windll.user32
             btn_map = {
                 "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
                 "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
@@ -144,62 +330,59 @@ class InputController:
             }
             down_flag, up_flag = btn_map.get(btn, btn_map["left"])
 
-            # Ensure desktop window receives focus if previous window was destroyed
-            if user32.GetForegroundWindow() == 0:
-                desk = user32.GetDesktopWindow()
-                if desk:
-                    try:
-                        user32.SetForegroundWindow(desk)
-                    except Exception:
-                        pass
+            if action in ("click", "dblclick", "down"):
+                self._heal_stuck_buttons()
+                if moved:
+                    # Short settle yield after pointer move so freshly exposed/closed Shell controls register pointer position
+                    await asyncio.sleep(0.004)
 
             if action == "down":
                 if btn in self.active_mouse_buttons:
-                    user32.mouse_event(up_flag, 0, 0, 0, 0)
+                    self._win_send_mouse(up_flag, abs_x, abs_y)
                 if norm_x is not None and norm_y is not None:
                     self.down_coords[btn] = (float(norm_x), float(norm_y))
                 self.is_dragging = False
-                user32.mouse_event(down_flag, 0, 0, 0, 0)
+                sent, err = self._win_send_mouse(down_flag, abs_x, abs_y)
                 self.active_mouse_buttons.add(btn)
                 self.last_down_times[btn] = time.perf_counter()
+                self._log_event(f"down:{btn}", norm_x, norm_y, abs_x, abs_y, sent, err)
 
             elif action == "up":
                 last_t = self.last_down_times.get(btn, 0.0)
                 elapsed = time.perf_counter() - last_t
-                # Guaranteed minimum hold duration without blocking the asyncio loop!
                 if 0.0 < elapsed < 0.025:
                     await asyncio.sleep(0.025 - elapsed)
-                user32.mouse_event(up_flag, 0, 0, 0, 0)
+                sent, err = self._win_send_mouse(up_flag, abs_x, abs_y)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
                 self.is_dragging = False
+                self._log_event(f"up:{btn}", norm_x, norm_y, abs_x, abs_y, sent, err)
 
             elif action == "click":
                 if btn in self.active_mouse_buttons:
-                    user32.mouse_event(up_flag, 0, 0, 0, 0)
-                user32.mouse_event(down_flag, 0, 0, 0, 0)
+                    self._win_send_mouse(up_flag, abs_x, abs_y)
+                sent1, err1 = self._win_send_mouse(down_flag, abs_x, abs_y)
                 await asyncio.sleep(0.035)
-                user32.mouse_event(up_flag, 0, 0, 0, 0)
+                sent2, err2 = self._win_send_mouse(up_flag, abs_x, abs_y)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
                 self.is_dragging = False
+                self._log_event(f"click:{btn}", norm_x, norm_y, abs_x, abs_y, sent1 & sent2, err1 or err2)
 
             elif action == "dblclick":
                 if btn in self.active_mouse_buttons:
-                    user32.mouse_event(up_flag, 0, 0, 0, 0)
-                # First click (down -> 30ms -> up)
-                user32.mouse_event(down_flag, 0, 0, 0, 0)
+                    self._win_send_mouse(up_flag, abs_x, abs_y)
+                sent1, err1 = self._win_send_mouse(down_flag, abs_x, abs_y)
                 await asyncio.sleep(0.030)
-                user32.mouse_event(up_flag, 0, 0, 0, 0)
-                # Inter-click delay (human natural double-click timing: 80ms)
+                self._win_send_mouse(up_flag, abs_x, abs_y)
                 await asyncio.sleep(0.080)
-                # Second click (down -> 30ms -> up)
-                user32.mouse_event(down_flag, 0, 0, 0, 0)
+                sent2, err2 = self._win_send_mouse(down_flag, abs_x, abs_y)
                 await asyncio.sleep(0.030)
-                user32.mouse_event(up_flag, 0, 0, 0, 0)
+                self._win_send_mouse(up_flag, abs_x, abs_y)
                 self.active_mouse_buttons.discard(btn)
                 self.down_coords.pop(btn, None)
                 self.is_dragging = False
+                self._log_event(f"dblclick:{btn}", norm_x, norm_y, abs_x, abs_y, sent1 & sent2, err1 or err2)
 
         elif HAS_PYNPUT:
             p_btn = {"left": Button.left, "right": Button.right, "middle": Button.middle}.get(btn, Button.left)
@@ -234,16 +417,15 @@ class InputController:
         if not config.allow_input_control:
             return
         if IS_WINDOWS:
-            user32 = ctypes.windll.user32
             if delta_y != 0:
                 # Browser wheel deltaY > 0 means scroll down -> Windows wheel negative
                 wheel_amount = int(-delta_y * 1.2)
                 if abs(wheel_amount) < 40:
                     wheel_amount = -120 if delta_y > 0 else 120
-                user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, wheel_amount, 0)
+                self._win_send_mouse(MOUSEEVENTF_WHEEL, mouse_data=wheel_amount)
             if delta_x != 0:
                 hwheel_amount = int(delta_x * 1.2)
-                user32.mouse_event(MOUSEEVENTF_HWHEEL, 0, 0, hwheel_amount, 0)
+                self._win_send_mouse(MOUSEEVENTF_HWHEEL, mouse_data=hwheel_amount)
         elif HAS_PYNPUT:
             dx = -1 if delta_x > 0 else (1 if delta_x < 0 else 0)
             dy = -1 if delta_y > 0 else (1 if delta_y < 0 else 0)
@@ -278,14 +460,13 @@ class InputController:
         if IS_WINDOWS:
             vk = self._get_vk(key, code)
             if vk:
-                user32 = ctypes.windll.user32
                 if action == "down":
-                    user32.keybd_event(vk, 0, 0, 0)
+                    self._win_send_key(vk, key_up=False)
                 elif action == "up":
-                    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+                    self._win_send_key(vk, key_up=True)
                 elif action == "press":
-                    user32.keybd_event(vk, 0, 0, 0)
-                    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+                    self._win_send_key(vk, key_up=False)
+                    self._win_send_key(vk, key_up=True)
                 return
 
         if HAS_PYNPUT:
@@ -361,18 +542,15 @@ class InputController:
         self.down_coords.clear()
         self.is_dragging = False
         if IS_WINDOWS:
-            user32 = ctypes.windll.user32
-            # Explicitly release left, right, middle
-            user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-            user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
-            user32.mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0)
+            self._win_send_mouse(MOUSEEVENTF_LEFTUP)
+            self._win_send_mouse(MOUSEEVENTF_RIGHTUP)
+            self._win_send_mouse(MOUSEEVENTF_MIDDLEUP)
             self.active_mouse_buttons.clear()
             self.last_down_times.clear()
 
-            # Release common modifiers (Shift, Ctrl, Alt, Win)
             for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5):
                 try:
-                    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+                    self._win_send_key(vk, key_up=True)
                 except Exception:
                     pass
             self.active_keys.clear()
@@ -412,8 +590,8 @@ class InputController:
                 await self.send_hotkey(msg.get("combo", ""))
             elif t in ("release_all", "reset_input"):
                 self.release_all()
-        except Exception:
-            pass
+        except Exception as e:
+            self.debug_log.append({"ts": round(time.time(), 3), "event": "error", "err": str(e)})
 
 
 input_controller = InputController()
