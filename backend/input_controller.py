@@ -1,3 +1,4 @@
+import asyncio
 import ctypes
 import platform
 import time
@@ -93,6 +94,8 @@ class InputController:
         self.active_mouse_buttons = set()
         self.active_keys = set()
         self.last_down_times = {}
+        self.down_coords = {}
+        self.is_dragging = False
 
     def _resolve_coords(self, norm_x: float, norm_y: float, monitor_id: int = 1) -> tuple[int, int]:
         bounds = screen_engine.get_monitor_bounds(monitor_id)
@@ -105,20 +108,33 @@ class InputController:
     def move_mouse(self, norm_x: float, norm_y: float, monitor_id: int = 1):
         if not config.allow_input_control:
             return
+
+        # Trackpad Jitter Filter: When mouse button is held down (tap/click),
+        # suppress micro-movements (< 12 pixels) so Windows never confuses clicks with drag-and-drop!
+        if self.active_mouse_buttons:
+            down_pos = self.down_coords.get("left")
+            if down_pos and not self.is_dragging:
+                dx = float(norm_x) - down_pos[0]
+                dy = float(norm_y) - down_pos[1]
+                if (dx * dx + dy * dy) < 0.0001:
+                    return
+                self.is_dragging = True
+
         x, y = self._resolve_coords(norm_x, norm_y, monitor_id)
         if IS_WINDOWS:
             ctypes.windll.user32.SetCursorPos(x, y)
         elif HAS_PYNPUT:
             _mouse.position = (x, y)
 
-    def mouse_button(self, action: str, button: str = "left", norm_x: float = None, norm_y: float = None, monitor_id: int = 1):
+    async def mouse_button(self, action: str, button: str = "left", norm_x: float = None, norm_y: float = None, monitor_id: int = 1):
         """action: 'down', 'up', 'click', 'dblclick' | button: 'left', 'middle', 'right'"""
         if not config.allow_input_control:
             return
+
+        btn = (button or "left").lower()
         if norm_x is not None and norm_y is not None:
             self.move_mouse(norm_x, norm_y, monitor_id)
 
-        btn = (button or "left").lower()
         if IS_WINDOWS:
             user32 = ctypes.windll.user32
             btn_map = {
@@ -127,41 +143,64 @@ class InputController:
                 "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
             }
             down_flag, up_flag = btn_map.get(btn, btn_map["left"])
+
+            # Ensure desktop window receives focus if previous window was destroyed
+            if user32.GetForegroundWindow() == 0:
+                desk = user32.GetDesktopWindow()
+                if desk:
+                    try:
+                        user32.SetForegroundWindow(desk)
+                    except Exception:
+                        pass
+
             if action == "down":
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
+                if norm_x is not None and norm_y is not None:
+                    self.down_coords[btn] = (float(norm_x), float(norm_y))
+                self.is_dragging = False
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.add(btn)
                 self.last_down_times[btn] = time.perf_counter()
+
             elif action == "up":
-                # Ensure minimum hold duration (35ms) for tap-to-click on touchpads so Windows never drops clicks!
                 last_t = self.last_down_times.get(btn, 0.0)
                 elapsed = time.perf_counter() - last_t
-                if 0.0 < elapsed < 0.035:
-                    time.sleep(0.035 - elapsed)
+                # Guaranteed minimum hold duration without blocking the asyncio loop!
+                if 0.0 < elapsed < 0.025:
+                    await asyncio.sleep(0.025 - elapsed)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
+                self.down_coords.pop(btn, None)
+                self.is_dragging = False
+
             elif action == "click":
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                time.sleep(0.035)
+                await asyncio.sleep(0.025)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
+                self.down_coords.pop(btn, None)
+                self.is_dragging = False
+
             elif action == "dblclick":
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
                 # First click (down -> 25ms -> up)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                time.sleep(0.025)
+                await asyncio.sleep(0.025)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 # Inter-click delay
-                time.sleep(0.035)
+                await asyncio.sleep(0.035)
                 # Second click (down -> 25ms -> up)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                time.sleep(0.025)
+                await asyncio.sleep(0.025)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
+                self.down_coords.pop(btn, None)
+                self.is_dragging = False
+
         elif HAS_PYNPUT:
             p_btn = {"left": Button.left, "right": Button.right, "middle": Button.middle}.get(btn, Button.left)
             if action == "down":
@@ -170,12 +209,18 @@ class InputController:
             elif action == "up":
                 _mouse.release(p_btn)
                 self.active_mouse_buttons.discard(btn)
+                self.down_coords.pop(btn, None)
+                self.is_dragging = False
             elif action == "click":
                 _mouse.click(p_btn, 1)
                 self.active_mouse_buttons.discard(btn)
+                self.down_coords.pop(btn, None)
+                self.is_dragging = False
             elif action == "dblclick":
                 _mouse.click(p_btn, 2)
                 self.active_mouse_buttons.discard(btn)
+                self.down_coords.pop(btn, None)
+                self.is_dragging = False
 
     def scroll(self, delta_x: float = 0, delta_y: float = 0):
         if not config.allow_input_control:
@@ -276,7 +321,7 @@ class InputController:
         if HAS_PYNPUT:
             _keyboard.type(text)
 
-    def send_hotkey(self, combo_name: str):
+    async def send_hotkey(self, combo_name: str):
         """Execute common remote desktop shortcuts."""
         if not config.allow_input_control:
             return
@@ -299,12 +344,14 @@ class InputController:
             return
         for k in keys:
             self.key_event("down", k, k)
-        time.sleep(0.04)
+        await asyncio.sleep(0.04)
         for k in reversed(keys):
             self.key_event("up", k, k)
 
     def release_all(self):
         """Safely release all active mouse buttons and modifier keys."""
+        self.down_coords.clear()
+        self.is_dragging = False
         if IS_WINDOWS:
             user32 = ctypes.windll.user32
             # Explicitly release left, right, middle
@@ -330,7 +377,7 @@ class InputController:
             except Exception:
                 pass
 
-    def handle_packet(self, msg: Dict[str, Any]):
+    async def handle_packet(self, msg: Dict[str, Any]):
         """Dispatch incoming WebSocket / DataChannel input control packet safely."""
         try:
             t = msg.get("type")
@@ -339,7 +386,7 @@ class InputController:
                 self.move_mouse(msg.get("x", 0), msg.get("y", 0), mon)
             elif t in ("mousedown", "mouseup", "click", "dblclick"):
                 action = t.replace("mouse", "")
-                self.mouse_button(
+                await self.mouse_button(
                     action=action,
                     button=msg.get("button", "left"),
                     norm_x=msg.get("x"),
@@ -354,7 +401,7 @@ class InputController:
             elif t == "text":
                 self.type_text(msg.get("text", ""))
             elif t == "hotkey":
-                self.send_hotkey(msg.get("combo", ""))
+                await self.send_hotkey(msg.get("combo", ""))
             elif t in ("release_all", "reset_input"):
                 self.release_all()
         except Exception:

@@ -495,14 +495,28 @@ namespace SiamRemoteMeSetup
                     Directory.CreateDirectory(targetDir);
                 }
 
-                // Kill existing instance if running from targetDir
-                foreach (string procName in new[] { "SIAM_RemoteMe_Studio", "SIAM_RemoteMe_Portable" })
+                // Kill existing instances of application and tunneling daemons
+                foreach (string procName in new[] { "SIAM_RemoteMe_Studio", "SIAM_RemoteMe_Portable", "cloudflared" })
                 {
                     foreach (var proc in Process.GetProcessesByName(procName))
                     {
-                        try { proc.Kill(); proc.WaitForExit(2000); } catch { }
+                        try { proc.Kill(); proc.WaitForExit(3000); } catch { }
                     }
                 }
+
+                // Forcefully terminate any orphaned background processes
+                try
+                {
+                    ProcessStartInfo tskill = new ProcessStartInfo("taskkill", "/F /IM SIAM_RemoteMe_Studio.exe /IM SIAM_RemoteMe_Portable.exe /IM cloudflared.exe /T")
+                    {
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    using (var p = Process.Start(tskill)) { p.WaitForExit(3000); }
+                }
+                catch { }
+
+                Thread.Sleep(500);
 
                 // Clean up any old renamed files from previous updates
                 try
@@ -548,19 +562,20 @@ namespace SiamRemoteMeSetup
                             }
                             catch (IOException)
                             {
-                                // If file is locked by a running background process (e.g. cloudflared.exe),
-                                // rename the running file out of the way or keep existing if already present.
+                                // If file is locked by a lingering process, try killing it and retry
                                 try
                                 {
-                                    string movedPath = fullPath + ".old_" + Guid.NewGuid().ToString("N").Substring(0, 6);
-                                    if (File.Exists(fullPath))
+                                    string procName = Path.GetFileNameWithoutExtension(fullPath);
+                                    foreach (var proc in Process.GetProcessesByName(procName))
                                     {
-                                        File.Move(fullPath, movedPath);
+                                        try { proc.Kill(); proc.WaitForExit(2000); } catch { }
                                     }
+                                    Thread.Sleep(300);
                                     entry.ExtractToFile(fullPath, true);
                                 }
                                 catch
                                 {
+                                    // If file already exists and is locked, allow setup to proceed
                                     if (!File.Exists(fullPath))
                                         throw;
                                 }

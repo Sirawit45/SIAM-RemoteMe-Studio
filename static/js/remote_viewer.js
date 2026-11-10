@@ -498,7 +498,7 @@ const RemoteViewer = {
             const btn = btnMap[e.button] || 'left';
             if (this.pressedButtons.has(btn)) {
                 this.pressedButtons.delete(btn);
-                this.sendJson({ type: 'mouseup', button: btn });
+                this.sendJson({ type: 'mouseup', button: btn, x: this.virtualCursorX, y: this.virtualCursorY });
             }
         });
 
@@ -513,11 +513,8 @@ const RemoteViewer = {
         });
 
         c.addEventListener('dblclick', (e) => {
-            if (!this.inputEnabled) return;
             e.preventDefault();
-            const btn = btnMap[e.button] || 'left';
-            const { x, y } = this.getNormalizedCoords(e);
-            this.sendJson({ type: 'dblclick', button: btn, x, y });
+            // Native rapid mousedown/mouseup pairs dispatched above trigger native Windows OS double-click cleanly.
         });
 
         c.addEventListener('contextmenu', (e) => e.preventDefault());
