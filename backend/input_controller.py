@@ -92,6 +92,7 @@ class InputController:
     def __init__(self):
         self.active_mouse_buttons = set()
         self.active_keys = set()
+        self.last_down_times = {}
 
     def _resolve_coords(self, norm_x: float, norm_y: float, monitor_id: int = 1) -> tuple[int, int]:
         bounds = screen_engine.get_monitor_bounds(monitor_id)
@@ -131,23 +132,34 @@ class InputController:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.add(btn)
+                self.last_down_times[btn] = time.perf_counter()
             elif action == "up":
+                # Ensure minimum hold duration (35ms) for tap-to-click on touchpads so Windows never drops clicks!
+                last_t = self.last_down_times.get(btn, 0.0)
+                elapsed = time.perf_counter() - last_t
+                if 0.0 < elapsed < 0.035:
+                    time.sleep(0.035 - elapsed)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
             elif action == "click":
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                time.sleep(0.015)
+                time.sleep(0.035)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
             elif action == "dblclick":
                 if btn in self.active_mouse_buttons:
                     user32.mouse_event(up_flag, 0, 0, 0, 0)
+                # First click (down -> 25ms -> up)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
+                time.sleep(0.025)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
-                time.sleep(0.02)
+                # Inter-click delay
+                time.sleep(0.035)
+                # Second click (down -> 25ms -> up)
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
+                time.sleep(0.025)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 self.active_mouse_buttons.discard(btn)
         elif HAS_PYNPUT:
@@ -300,6 +312,7 @@ class InputController:
             user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
             user32.mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0)
             self.active_mouse_buttons.clear()
+            self.last_down_times.clear()
 
             # Release common modifiers (Shift, Ctrl, Alt, Win)
             for vk in (0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5):
@@ -313,6 +326,7 @@ class InputController:
                 for b in (Button.left, Button.right, Button.middle):
                     _mouse.release(b)
                 self.active_mouse_buttons.clear()
+                self.last_down_times.clear()
             except Exception:
                 pass
 
